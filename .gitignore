@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+node_modules/
+*.xlsx
+*.xls
+*.db
+*.sqlite*
+.env*
+data/raw/
+data/processed/
+work/
+test-results/
+playwright-report/
