@@ -153,4 +153,3 @@ def preprocess(path, *, sheet=None, partial_dates=None, source_name=None):
               "dates": len(days), "partial_dates": sorted(partial), "skipped_rows": skipped,
               "warning_counts": dict(Counter(w["code"] for w in warnings)), "warnings": warnings}
     return validate_records(records), report
-
