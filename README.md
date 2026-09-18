@@ -36,14 +36,21 @@ http://127.0.0.1:8000 에서 확인합니다. 기본 입력은 합성 샘플입�
 
 ```sh
 python -m scripts.rebuild path/to/records.json
-# 원본 Excel을 독립 어댑터로 확인할 때 (부분 수집일을 명시)
-python -m scripts.rebuild path/to/input.xlsx --partial-date 2026-09-10
+# Excel은 기존 이력을 보존하며 날짜·게이트 단위로 갱신합니다.
+python -m library_etl refresh path/to/input.xlsx --output data/processed/records.json --partial-date 2026-09-10
+# 모든 날짜의 수집 완료가 확인된 파일만 --all-complete 사용
 ```
 
 `LIBRARY_RECORDS` 환경변수를 `data/processed/records.json`으로 설정한 뒤 서버를 실행합니다.
 PowerShell: `$env:LIBRARY_RECORDS='data/processed/records.json'`
 POSIX: `export LIBRARY_RECORDS=data/processed/records.json`
 새 records 전체 스냅샷을 같은 경로로 rebuild한 뒤 웹에서 새로고침합니다.
+Excel 갱신 시에는 위 `library_etl refresh`를 사용합니다. 부분 날짜를 생략하면
+최신 날짜를 보수적으로 partial 처리하며, 완료 데이터를 partial로 덮어쓰지 않습니다.
+`--output` 생략 시 `LIBRARY_RECORDS`, 그다음 `data/processed/records.json`을 사용합니다.
+보고서는 stdout JSON으로 반환하며 운영 JSON 외의 별도 보고서 파일을 게시하지 않습니다.
+
+[ADE-21 JSON 갱신 실행법·실패 보존·검증](docs/json-refresh.md)
 
 ## 검증
 
