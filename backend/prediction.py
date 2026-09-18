@@ -4,6 +4,7 @@ from datetime import timedelta
 from math import sqrt
 from statistics import mean
 
+from .congestion import midrank_score
 from .domain import HOURS, LEVELS, parse_date
 
 
@@ -16,9 +17,7 @@ def historical(rows, target, weeks):
 
 
 def percentile(value, values):
-    # Midrank treats a constant distribution as normal instead of always busy.
-    score = 100 * (sum(v < value for v in values) + .5 * sum(v == value for v in values)) / len(values)
-    return round(score, 1), 'quiet' if score <= 35 else 'normal' if score <= 70 else 'busy'
+    return midrank_score(value, values)
 
 
 def forecast(rows, target, weeks=4):
