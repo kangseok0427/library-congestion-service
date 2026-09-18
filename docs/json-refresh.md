@@ -112,4 +112,10 @@ Starlette/httpx 및 AnyIO 사용 중단 예고 경고 2건이 있으며 테스�
 Chromium E2E **PASS**: 기존 JSON 교체, 합성 XLSX 정상 갱신 후 DOM 변경,
 잘못된 XLSX 반영 거부 후 기존 DOM 유지, OUT_11 API null, 390px 화면을 확인했다.
 실제 원본 Excel은 두 작업 저장소에서 발견하지 못해 검증하지 않았다.
-CI는 PR 제출 후 별도로 확인한다. 로컬 통과를 CI 통과로 간주하지 않는다.
+공용 [PR #4](https://github.com/kangseok0427/library-congestion-service/pull/4)를 제출했다.
+구현 커밋은 `403d924`, 실행/검증 문서 커밋은 `92127c0`이다.
+공용 저장소 push 권한이 없어 `psy0635-ctrl/library-congestion-service` fork를 사용했다.
+첫 [PR CI 실행](https://github.com/kangseok0427/library-congestion-service/actions/runs/35342751546)은
+`action_required`이며 jobs가 없어 실제 테스트는 실행되지 않았다. 팀장이 GitHub에서
+fork PR의 workflow 실행을 승인해야 한다. 로컬 통과를 CI 통과로 간주하지 않는다.
+검토와 CI 승인·통과 확인, PR #1 통합 후 develop 기준 재확인은 남아 있다.
