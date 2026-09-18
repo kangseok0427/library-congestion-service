@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from statistics import mean
 
-from .domain import HOURS, LEVELS, DataError, aggregate, parse_date, validate_records
+from .domain import HOURS, LEVELS, DataError, aggregate, parse_date, validate_records, nullable_sum
 from .prediction import forecast, recommendation, historical, percentile
 
 KST = timezone(timedelta(hours=9))
@@ -38,7 +38,7 @@ class LibraryService:
                     total_in=sum(r['total_in'] for r in gates.values()),
                     total_out=sum(r['total_out'] for r in gates.values()),
                     hourly=rows, hourly_total_in=sum(r['in_count'] for r in rows),
-                    hourly_total_out=sum(r['out_count'] for r in rows),
+                    hourly_total_out=nullable_sum(r['out_count'] for r in rows),
                     updated_at=self.updated_at)
 
     def today(self, now=None, target=None):

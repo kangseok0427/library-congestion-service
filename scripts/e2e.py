@@ -12,7 +12,10 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from playwright.sync_api import sync_playwright, expect
+from openpyxl import Workbook
 from backend.adapters import read_records
+from backend.domain import DataError
+from library_etl import refresh
 from scripts.rebuild import rebuild
 from scripts.sample import generate
 
@@ -49,6 +52,25 @@ def main():
                 page.get_by_role('button',name='새로고침').click()
                 expect(page.locator('#actual')).to_contain_text(f'IN {expected+3200}명')
                 assert before!=page.locator('#hourly').inner_text()
+                # Exercise T02/T08 with a real synthetic XLSX, not only JSON.
+                if not args.records:
+                    book=Workbook();sheet=book.active
+                    sheet.append(['수집일자','게이트','통로ID','전체_IN','전체_OUT']+
+                                 [f'{kind}_{hour:02}' for hour in range(8,24) for kind in ('IN','OUT')])
+                    for gate in ('자료실.정문','자료실.후문'):
+                        sheet.append([args.date,gate,'synthetic-browser',777,555]+[7]*32)
+                    source=Path(directory)/'refresh.xlsx';book.save(source)
+                    refresh(source,path,partial_dates=[])
+                    page.get_by_role('button',name='새로고침').click()
+                    expect(page.locator('#actual')).to_contain_text('IN 1554명')
+                    assert page.request.get(url+'/api/v1/stats?date='+args.date).json()['hourly'][3]['out_count'] is None
+                    saved=path.read_bytes();sheet.cell(2,6).value='=1+1';book.save(source);book.close()
+                    try:refresh(source,path,partial_dates=[])
+                    except DataError:pass
+                    else:raise AssertionError('Invalid workbook was accepted')
+                    assert path.read_bytes()==saved
+                    page.get_by_role('button',name='새로고침').click()
+                    expect(page.locator('#actual')).to_contain_text('IN 1554명')
                 page.set_viewport_size({'width':390,'height':844})
                 assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
                 Path('test-results').mkdir(exist_ok=True)
@@ -63,7 +85,9 @@ def main():
                 browser.close()
             print(json.dumps({'e2e':'PASS','input':'real_records' if args.records else 'synthetic',
                               'checks':['API to DOM','16 forecast rows and bars','record replacement updates actual and forecast',
-                                        '390px no page overflow','invalid replacement error and stale number removal']},ensure_ascii=False))
+                                        '390px no page overflow','invalid replacement error and stale number removal']+
+                                       (['synthetic XLSX refresh updates DOM','OUT_11 remains null',
+                                         'invalid XLSX preserves JSON and DOM'] if not args.records else [])},ensure_ascii=False))
         finally:
             process.terminate();process.wait(timeout=10)
 

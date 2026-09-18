@@ -4,19 +4,22 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from backend.adapters import from_excel, read_records
+from backend.adapters import read_records
 from backend.service import LibraryService
 from backend.prediction import backtest
 
 
 def rebuild(records, destination):
     service=LibraryService(records)  # validate + recompute before publishing
-    service.today()
+    json.dumps(service.today(), allow_nan=False)
+    json.dumps(service.patterns(), allow_nan=False)
+    for day in sorted({r['date'] for r in service.records}):
+        json.dumps(service.stats(day), allow_nan=False)
     destination=Path(destination);destination.parent.mkdir(parents=True,exist_ok=True)
     fd,temp=tempfile.mkstemp(dir=destination.parent,suffix='.tmp')
     try:
         with os.fdopen(fd,'w',encoding='utf-8') as stream:
-            json.dump(service.records,stream,ensure_ascii=False)
+            json.dump(service.records,stream,ensure_ascii=False,allow_nan=False)
             stream.flush();os.fsync(stream.fileno())
         os.replace(temp,destination)
     finally:
@@ -27,15 +30,23 @@ def rebuild(records, destination):
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('source');parser.add_argument('--output',default='data/processed/records.json')
-    parser.add_argument('--partial-date',action='append',default=[])
-    parser.add_argument('--report',default='data/processed/report.json')
+    group=parser.add_mutually_exclusive_group()
+    group.add_argument('--partial-date',action='append')
+    group.add_argument('--all-complete',action='store_true')
     args=parser.parse_args()
-    records,report=from_excel(args.source,args.partial_date) if args.source.lower().endswith('.xlsx') else (read_records(args.source),{})
-    service=rebuild(records,args.output)
-    report.update(record_count=len(records),backtest=backtest(service.rows))
-    path=Path(args.report);path.parent.mkdir(parents=True,exist_ok=True)
-    path.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
-    print(json.dumps({'record_count':len(records),'warning_count':len(report.get('warnings',[])),'backtest':report['backtest']},ensure_ascii=True))
+    if args.source.lower().endswith('.xlsx'):
+        from library_etl import refresh
+        report=refresh(args.source,args.output,partial_dates=[] if args.all_complete else args.partial_date)
+    else:
+        records=read_records(args.source)
+        report={'record_count':len(records),'backtest':backtest(LibraryService(records).rows)}
+        json.dumps(report,allow_nan=False)
+        rebuild(records,args.output)
+    # Reports are returned on stdout; no fallible report-file write after commit.
+    try:
+        print(json.dumps(report,ensure_ascii=True))
+    except OSError:
+        pass
 
 
 if __name__=='__main__':main()

@@ -1,4 +1,6 @@
 import os
+import hashlib
+import json
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
@@ -9,7 +11,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
-from .adapters import read_records
 from .domain import HOURS, LEVELS, DataError, parse_date
 from .service import KST, LibraryService
 
@@ -26,15 +27,24 @@ class FileProvider:
     def get(self):
         with self.lock:
             try:
-                stat = self.path.stat()
-                signature = (stat.st_mtime_ns, stat.st_size)
+                # Read bytes and metadata from one handle so a replacement cannot
+                # pair the old signature with a new file. Content detects equal
+                # size/mtime updates as well as rapid consecutive replacements.
+                with self.path.open('rb') as stream:
+                    stat = os.fstat(stream.fileno())
+                    payload = stream.read()
+                signature = (stat.st_mtime_ns, hashlib.sha256(payload).digest())
                 if signature != self.signature:
-                    service = LibraryService(read_records(self.path),
+                    service = LibraryService(json.loads(payload.decode('utf-8-sig')),
                                              datetime.fromtimestamp(stat.st_mtime, KST).isoformat(), sample=self.sample)
                     self.service, self.signature = service, signature
                 return self.service
             except OSError as exc:
                 raise DataError('데이터 파일을 찾을 수 없습니다.', 'DATA_NOT_FOUND') from exc
+            except (ValueError, UnicodeError) as exc:
+                if isinstance(exc, DataError):
+                    raise
+                raise DataError('records 파일을 읽을 수 없습니다.') from exc
 
 
 def create_app(provider=None):
