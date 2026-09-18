@@ -38,9 +38,11 @@ def validate_records(records):
             raise DataError(f'record {index}: 요일 또는 게이트 오류')
         if type(row['hour']) is not int or row['hour'] not in HOURS:
             raise DataError(f'record {index}: hour는 8~23 정수입니다.')
-        for key in ('in_count', 'out_count', 'total_in', 'total_out'):
+        for key in ('in_count', 'total_in', 'total_out'):
             if type(row[key]) is not int or row[key] < 0:
                 raise DataError(f'record {index}: {key} 결측/음수/비정수')
+        if row['out_count'] is not None and (type(row['out_count']) is not int or row['out_count'] < 0):
+            raise DataError(f'record {index}: out_count는 0 이상 정수 또는 null입니다.')
         if type(row['is_partial']) is not bool:
             raise DataError(f'record {index}: is_partial은 boolean입니다.')
         for key in ('gate_name', 'passage_id', 'source_file'):
@@ -65,7 +67,8 @@ def aggregate(records):
         grouped[row['date'], row['hour']].append(row)
     return [dict(date=day, hour=hour,
                  in_count=sum(r['in_count'] for r in rows),
-                 out_count=sum(r['out_count'] for r in rows),
+                 out_count=(sum(r['out_count'] for r in rows if r['out_count'] is not None)
+                            if any(r['out_count'] is not None for r in rows) else None),
                  visit_count=sum(r['in_count'] for r in rows),
                  baseline_avg=None, difference_rate=None,
                  congestion_score=None, congestion_level=None,

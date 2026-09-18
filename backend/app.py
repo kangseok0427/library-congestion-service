@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException
 from .adapters import read_records
 from .domain import HOURS, LEVELS, DataError, parse_date
 from .service import KST, LibraryService
+from library_etl import DataError as EtlDataError, read_current
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,9 +38,33 @@ class FileProvider:
                 raise DataError('데이터 파일을 찾을 수 없습니다.', 'DATA_NOT_FOUND') from exc
 
 
+class SQLiteProvider:
+    """Serve the transactionally refreshed T08 SQLite snapshot."""
+    def __init__(self, path):
+        self.path = Path(path)
+        self.signature, self.service = None, None
+        self.lock = Lock()
+
+    def get(self):
+        with self.lock:
+            try:
+                stat = self.path.stat()
+                signature = (stat.st_mtime_ns, stat.st_size)
+                if signature != self.signature:
+                    records, state = read_current(self.path)
+                    updated_at = datetime.fromtimestamp(stat.st_mtime, KST).isoformat()
+                    self.service = LibraryService(records, updated_at)
+                    self.signature = signature
+                return self.service
+            except (OSError, EtlDataError) as exc:
+                raise DataError('갱신 데이터베이스를 읽을 수 없습니다.', 'DATA_NOT_FOUND') from exc
+
+
 def create_app(provider=None):
     path = os.environ.get('LIBRARY_RECORDS')
-    provider = provider or FileProvider(path or ROOT / 'data/sample/records.json', sample=not bool(path))
+    database = os.environ.get('LIBRARY_DB')
+    provider = provider or (SQLiteProvider(database) if database else
+                            FileProvider(path or ROOT / 'data/sample/records.json', sample=not bool(path)))
     app = FastAPI(title='Library congestion v1')
 
     @app.exception_handler(DataError)

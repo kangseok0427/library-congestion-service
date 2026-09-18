@@ -38,7 +38,7 @@ class LibraryService:
                     total_in=sum(r['total_in'] for r in gates.values()),
                     total_out=sum(r['total_out'] for r in gates.values()),
                     hourly=rows, hourly_total_in=sum(r['in_count'] for r in rows),
-                    hourly_total_out=sum(r['out_count'] for r in rows),
+                    hourly_total_out=sum(r['out_count'] for r in rows if r['out_count'] is not None),
                     updated_at=self.updated_at)
 
     def today(self, now=None, target=None):
