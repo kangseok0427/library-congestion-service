@@ -47,6 +47,14 @@ POSIX: `export LIBRARY_RECORDS=data/processed/records.json`
 
 ## 검증
 
+### T03·T06 통계/API
+
+- `GET /api/v1/health`: 서버 상태 확인
+- `GET /api/v1/patterns`: 일별·시간대별·요일별·요일/시간별·월별 기본 통계
+
+통계와 API는 공통 `records.json`을 직접 사용합니다. 별도 CSV·SQLite 저장소나
+`pandas`/`numpy` 실행 의존성은 사용하지 않습니다.
+
 ```sh
 python -m pytest -q
 python -m playwright install chromium
