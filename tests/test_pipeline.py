@@ -93,7 +93,21 @@ def test_api_contract_and_errors(records,tmp_path):
         response=client.get('/api/v1/stats?date='+query)
         assert response.status_code in (400,404) and response.json()['error']['code']==code
     assert client.get('/').status_code==200
-    assert client.get('/api/v1/patterns').json()['monthly']
+    patterns=client.get('/api/v1/patterns').json()
+    assert patterns['monthly'] and patterns['hourly'] and patterns['weekday_hourly']
+    assert patterns['weekday'][0]['day_of_week'] in {'Mon','Tue','Wed','Thu','Fri','Sat','Sun'}
+    assert client.get('/api/v1/health').json()=={'status':'ok'}
+
+
+def test_t03_patterns_use_complete_records_only(records):
+    for row in records:
+        if row['date']=='2026-09-14':
+            row['is_partial']=True
+    patterns=LibraryService(records).patterns()
+    assert '2026-09-14' not in {row['date'] for row in patterns['daily']}
+    assert len(patterns['hourly'])==16
+    assert len(patterns['weekday_hourly'])==7*16
+    assert {row['day_of_week'] for row in patterns['weekday']}=={'Mon','Tue','Wed','Thu','Fri','Sat','Sun'}
 
 
 def test_atomic_update_changes_api_and_failure_preserves_data(records,tmp_path):
