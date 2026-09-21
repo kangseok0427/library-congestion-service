@@ -11,6 +11,7 @@ from backend.prediction import backtest, forecast, percentile, recommendation
 from backend.service import KST, LibraryService
 from scripts.rebuild import rebuild
 from scripts.sample import generate
+from scripts.serve import bootstrap_records
 
 
 @pytest.fixture
@@ -137,3 +138,24 @@ def test_partial_label_and_source_mismatch(records):
 def test_recommendation_after_day_end(records):
     response=LibraryService(records).today(datetime(2026,9,15,23,30,tzinfo=KST))
     assert response['recommendation']['best_start_hour'] is None
+
+
+def test_health_fails_when_snapshot_is_missing(tmp_path):
+    client = TestClient(create_app(FileProvider(tmp_path / 'missing.json')))
+    response = client.get('/api/v1/health')
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'DATA_NOT_FOUND'
+
+
+def test_railway_bootstrap_requires_opt_in_and_preserves_existing(tmp_path, monkeypatch):
+    destination = tmp_path / 'volume' / 'records.json'
+    monkeypatch.setenv('LIBRARY_RECORDS', str(destination))
+    monkeypatch.delenv('LIBRARY_BOOTSTRAP_SAMPLE', raising=False)
+    with pytest.raises(RuntimeError):
+        bootstrap_records()
+    monkeypatch.setenv('LIBRARY_BOOTSTRAP_SAMPLE', 'true')
+    assert bootstrap_records() == destination
+    first = destination.read_bytes()
+    destination.write_text('{"preserved": true}', encoding='utf-8')
+    assert bootstrap_records() == destination
+    assert destination.read_text(encoding='utf-8') == '{"preserved": true}'

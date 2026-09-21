@@ -84,6 +84,9 @@ def create_app(provider=None):
 
     @app.get('/api/v1/health')
     def health():
+        # Railway should only route traffic after the configured snapshot is
+        # readable and valid, not merely after the Python process has started.
+        provider.get()
         return {'status': 'ok'}
 
     @app.get('/')
