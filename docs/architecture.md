@@ -1,5 +1,11 @@
 # ADE-15 / ADE-16 구현과 인수인계
 
+> ADE-21 변경: Excel 입력은 T02 파서로 통합했고 T08은 날짜·게이트 병합 후
+> 임시 JSON/rebuild 검증이 끝나면 운영 파일을 한 번 교체합니다.
+> 아래 v1 기준 설명 중 정확히 12필드/정수 OUT 제한은 대체되었습니다.
+> v1.1 선택 품질 필드와 null OUT, CLI 및 실패 보존 규칙은
+> [JSON 갱신 문서](json-refresh.md)를 참고하세요. 예측 정책은 기존 LEAD 구현을 유지합니다.
+
 ## 연결 구조
 
 `T02 records 배열 → validate_records → aggregate → LibraryService → /api/v1 → frontend`
@@ -8,7 +14,7 @@
 Linear의 공통 규격 v1과 ADE-6/ADE-12 리뷰를 확인하고 독립 어댑터를 구현했습니다.
 이 구현은 박수용님 코드를 수정하거나 복제한 것이 아닙니다.
 
-- T02: `backend.adapters.read_records(path)`가 정확한 v1 12개 필드 JSON 배열을 받습니다.
+- T02: `backend.adapters.read_records(path)`가 필수 v1 12필드와 v1.1 선택 품질 필드 JSON 배열을 받습니다.
 - T03: `backend.domain.aggregate(records)`의 공통 집계 결과를 대체할 수 있습니다.
 - T04: `backend.prediction.percentile`이 단계 판정 교체 지점입니다.
 - T06: `create_app(provider)`의 provider.get()이 서비스 스냅샷을 반환합니다.
@@ -16,7 +22,8 @@ Linear의 공통 규격 v1과 ADE-6/ADE-12 리뷰를 확인하고 독립 어댑�
 - T08: `scripts.rebuild.rebuild(records, destination)`을 갱신 완료 후 호출합니다.
   검증/재계산 성공 후 파일을 원자적으로 교체하므로 실패한 입력이 기존 파일을 덮어쓰지 않습니다.
   실행 중 API는 다음 요청에 변경된 파일을 읽습니다. 웹 새로고침으로 반영합니다.
-  CLI는 전체 스냅샷 교체 방식입니다. 기간 병합은 T08이 수행한 뒤 전체 records를 넘깁니다.
+  JSON CLI는 전체 스냅샷 교체 방식입니다. Excel CLI는 T08을 통해 날짜·게이트별로
+  병합하고, 임시 파일에서 rebuild 검증을 끝낸 뒤 운영 records를 게시합니다.
 
 ## 표준 데이터와 품질
 
@@ -26,7 +33,7 @@ Linear의 공통 규격 v1과 ADE-6/ADE-12 리뷰를 확인하고 독립 어댑�
 in_count, out_count, total_in, total_out, is_partial, source_file.
 
 - date는 YYYY-MM-DD, day_of_week는 Mon~Sun, gate는 front/back, hour는 8~23입니다.
-- 누락·음수·소수·중복 키를 0이나 합계로 보정하지 않습니다. 잘못된 스냅샷은 거절합니다.
+- 누락·음수·소수·중복 키를 0이나 합계로 보정하지 않습니다. OUT의 null은 결측으로 보존합니다.
 - 정문/후문 중 한쪽이 없으면 집계 시간대를 partial로 표시하고 예측 학습에서 제외합니다.
 - 원본 total_in/out은 날짜·게이트마다 한 번만 더합니다. hourly 합계와 별도로 보존합니다.
 - patterns는 모든 16시간·두 게이트가 완전한 날의 시간대 IN 합계를 사용합니다.
