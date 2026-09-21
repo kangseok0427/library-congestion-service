@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>용산꿈나무도서관 · 방문 안내</title><link rel="stylesheet" href="/static/style.css"><script defer src="/static/app.js"></script></head>
+<body><main><header><p class="eyebrow">YONGSAN LIBRARY</p><h1>나에게 맞는 방문 시간</h1><p>용산꿈나무도서관 · 과거 이용 패턴을 바탕으로 안내합니다.</p></header>
+<form id="date-form"><label for="date">기준 날짜</label><input type="date" id="date" required><button>조회</button><button type="button" id="refresh">새로고침</button></form>
+<p id="error" role="alert" hidden></p><p id="sample" class="notice" hidden>합성 샘플 데이터로 보는 예시입니다.</p>
+<section class="cards"><article><h2>예상 혼잡도</h2><strong id="level">불러오는 중</strong><p>예상 방문량 기준이며 현재 체류인원이 아닙니다.</p></article><article><h2>추천 방문 시간</h2><strong id="best">—</strong><p id="recommendation"></p></article></section>
+<section class="panel"><h2>시간대별 예상 방문량</h2><p>여유 · 보통 · 혼잡은 해당 시간대 과거 분포와 비교한 결과입니다.</p><div id="chart" class="chart" role="img" aria-label="시간대별 예상 방문량 그래프"></div><div class="table-wrap"><table><thead><tr><th>시간</th><th>예상 방문량</th><th>혼잡 단계</th><th>평소 대비</th><th>예측 근거</th></tr></thead><tbody id="hourly"></tbody></table></div></section>
+<section class="panel"><h2>선택한 날짜의 실제 집계</h2><p id="actual">불러오는 중</p><p id="actual-note"></p></section>
+<footer><p id="updated"></p><p id="reference"></p><p id="hours-note"></p><p>휴관일·실제 운영시간은 도서관 공지를 확인해주세요. 수집 시간대가 운영시간을 뜻하지는 않습니다.</p></footer></main></body></html>
