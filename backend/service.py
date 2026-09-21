@@ -62,11 +62,18 @@ class LibraryService:
             daily[row['date']].append(row)
         complete = {day: sum(r['visit_count'] for r in rows) for day, rows in daily.items()
                     if len(rows) == len(HOURS) and not any(r['is_partial'] for r in rows)}
-        weekdays, months = defaultdict(list), defaultdict(list)
+        hours, weekdays, weekday_hours, months = (defaultdict(list) for _ in range(4))
         for day, count in complete.items():
-            weekdays[parse_date(day).weekday()].append(count)
+            weekday = parse_date(day).strftime('%a')
+            weekdays[weekday].append(count)
             months[day[:7]].append(count)
+            for row in daily[day]:
+                hours[row['hour']].append(row['visit_count'])
+                weekday_hours[(weekday, row['hour'])].append(row['visit_count'])
         return dict(daily=[dict(date=d, visit_count=n) for d, n in sorted(complete.items())],
                     weekday=[dict(day_of_week=k, average=round(mean(v), 2), sample_days=len(v)) for k, v in sorted(weekdays.items())],
+                    hourly=[dict(hour=k, average=round(mean(v), 2), sample_days=len(v)) for k, v in sorted(hours.items())],
+                    weekday_hourly=[dict(day_of_week=k[0], hour=k[1], average=round(mean(v), 2), sample_days=len(v))
+                                    for k, v in sorted(weekday_hours.items())],
                     monthly=[dict(month=k, average=round(mean(v), 2), sample_days=len(v)) for k, v in sorted(months.items())],
                     basis='complete_hourly_in_sum')

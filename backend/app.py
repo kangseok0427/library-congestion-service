@@ -82,6 +82,10 @@ def create_app(provider=None):
     def patterns():
         return provider.get().patterns()
 
+    @app.get('/api/v1/health')
+    def health():
+        return {'status': 'ok'}
+
     @app.get('/')
     def index():
         return FileResponse(ROOT / 'frontend/index.html')
