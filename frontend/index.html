@@ -1,9 +1,68 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>용산꿈나무도서관 · 방문 안내</title><link rel="stylesheet" href="/static/style.css"><script defer src="/static/app.js"></script></head>
-<body><main><header><p class="eyebrow">YONGSAN LIBRARY</p><h1>나에게 맞는 방문 시간</h1><p>용산꿈나무도서관 · 과거 이용 패턴을 바탕으로 안내합니다.</p></header>
-<form id="date-form"><label for="date">기준 날짜</label><input type="date" id="date" required><button>조회</button><button type="button" id="refresh">새로고침</button></form>
-<p id="error" role="alert" hidden></p><p id="sample" class="notice" hidden>합성 샘플 데이터로 보는 예시입니다.</p>
-<section class="cards"><article><h2>예상 혼잡도</h2><strong id="level">불러오는 중</strong><p>예상 방문량 기준이며 현재 체류인원이 아닙니다.</p></article><article><h2>추천 방문 시간</h2><strong id="best">—</strong><p id="recommendation"></p></article></section>
-<section class="panel"><h2>시간대별 예상 방문량</h2><p>여유 · 보통 · 혼잡은 해당 시간대 과거 분포와 비교한 결과입니다.</p><div id="chart" class="chart" role="img" aria-label="시간대별 예상 방문량 그래프"></div><div class="table-wrap"><table><thead><tr><th>시간</th><th>예상 방문량</th><th>혼잡 단계</th><th>평소 대비</th><th>예측 근거</th></tr></thead><tbody id="hourly"></tbody></table></div></section>
-<section class="panel"><h2>선택한 날짜의 실제 집계</h2><p id="actual">불러오는 중</p><p id="actual-note"></p></section>
-<footer><p id="updated"></p><p id="reference"></p><p id="hours-note"></p><p>휴관일·실제 운영시간은 도서관 공지를 확인해주세요. 수집 시간대가 운영시간을 뜻하지는 않습니다.</p></footer></main></body></html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>용산꿈나무도서관 · 언제 가면 한산할까</title>
+<link rel="stylesheet" href="/static/style.css">
+<script defer src="/static/api.js"></script>
+<script defer src="/static/app.js"></script>
+</head>
+<body>
+<main>
+  <header class="top">
+    <p class="library" id="library">용산꿈나무도서관</p>
+    <h1>언제 가면 한산할까</h1>
+    <form id="date-form" class="date-row">
+      <label for="date">날짜</label>
+      <input type="date" id="date" required>
+      <button type="submit">조회</button>
+      <button type="button" id="refresh" class="ghost">새로고침</button>
+    </form>
+  </header>
+
+  <p id="error" class="error" role="alert" hidden></p>
+  <p id="sample" class="banner" hidden>합성 샘플 데이터로 보는 예시입니다. 실제 도서관 수치가 아닙니다.</p>
+
+  <section class="now" id="now" data-level="">
+    <p class="now-when" id="now-when">불러오는 중</p>
+    <p class="now-level" id="level">—</p>
+    <p class="now-basis" id="basis">과거 이용 패턴으로 계산한 예상 방문량 기준입니다. 현재 체류인원이 아닙니다.</p>
+  </section>
+
+  <section class="reco">
+    <p class="reco-title">추천 방문 시간</p>
+    <p class="reco-hours" id="best">—</p>
+    <p class="reco-msg" id="recommendation"></p>
+  </section>
+
+  <section class="hours">
+    <h2>시간대별 예상 방문량</h2>
+    <p class="hint">막대를 누르면 자세히 보입니다. 색은 그 시간대의 평소 분포와 비교한 결과입니다.</p>
+    <div id="chart" class="chart" role="img" aria-label="시간대별 예상 방문량 그래프"></div>
+    <ul class="legend"><li class="quiet">여유</li><li class="normal">보통</li><li class="busy">혼잡</li></ul>
+    <p class="detail" id="detail">시간대를 선택하세요.</p>
+    <details>
+      <summary>표로 보기</summary>
+      <div class="table-wrap"><table>
+        <thead><tr><th>시간</th><th>예상 방문량</th><th>단계</th><th>평소 대비</th><th>근거</th></tr></thead>
+        <tbody id="hourly"></tbody>
+      </table></div>
+    </details>
+  </section>
+
+  <section class="actual-box">
+    <h2>선택한 날짜의 실제 집계</h2>
+    <p id="actual">불러오는 중</p>
+    <p class="hint" id="actual-note"></p>
+  </section>
+
+  <footer>
+    <p id="updated"></p>
+    <p id="reference"></p>
+    <p id="hours-note"></p>
+    <p>휴관일과 실제 운영시간은 도서관 공지를 확인하세요.</p>
+  </footer>
+</main>
+</body>
+</html>
