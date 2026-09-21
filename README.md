@@ -46,12 +46,15 @@ PowerShell: `$env:LIBRARY_RECORDS='data/processed/records.json'`
 POSIX: `export LIBRARY_RECORDS=data/processed/records.json`
 새 records 전체 스냅샷을 같은 경로로 rebuild한 뒤 웹에서 새로고침합니다.
 
-## Railway 배포
+## PythonAnywhere 무료 배포
 
-운영 환경은 개인 PC와 Cloudflare Tunnel 대신 Railway PaaS를 사용합니다.
-`railway.toml`의 설정에 따라 `python -m scripts.serve`로 실행되며, 운영 데이터는
-Railway Volume의 `/data/records.json`에 보존합니다. 최초 설정, 사용자 도메인,
-환경변수, Rollback 절차는 [Railway 배포·운영 인수인계](docs/railway.md)를 따릅니다.
+수요일 MVP 공개 환경은 PythonAnywhere 무료 계정을 사용합니다. FastAPI는
+`pythonanywhere_asgi.py`를 통해 실행하고, 운영 데이터는 계정 홈의 별도 영구 경로에
+보존합니다. 계정 생성, GitHub clone, 가상환경, ASGI 등록, 재배포 및 복구 절차는
+[PythonAnywhere 무료 배포·운영 안내](docs/pythonanywhere.md)를 따릅니다.
+
+기존 `railway.toml`과 [Railway 안내](docs/railway.md)는 향후 유료 PaaS를 다시 검토할
+때를 위해 보존합니다. PythonAnywhere에서는 사용되지 않습니다.
 Excel 갱신 시에는 위 `library_etl refresh`를 사용합니다. 부분 날짜를 생략하면
 최신 날짜를 보수적으로 partial 처리하며, 완료 데이터를 partial로 덮어쓰지 않습니다.
 `--output` 생략 시 `LIBRARY_RECORDS`, 그다음 `data/processed/records.json`을 사용합니다.
