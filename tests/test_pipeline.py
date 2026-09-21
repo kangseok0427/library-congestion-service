@@ -1,4 +1,5 @@
 import copy
+import importlib
 import json
 from datetime import date, datetime
 
@@ -147,7 +148,7 @@ def test_health_fails_when_snapshot_is_missing(tmp_path):
     assert response.json()['error']['code'] == 'DATA_NOT_FOUND'
 
 
-def test_railway_bootstrap_requires_opt_in_and_preserves_existing(tmp_path, monkeypatch):
+def test_persistent_storage_bootstrap_requires_opt_in_and_preserves_existing(tmp_path, monkeypatch):
     destination = tmp_path / 'volume' / 'records.json'
     monkeypatch.setenv('LIBRARY_RECORDS', str(destination))
     monkeypatch.delenv('LIBRARY_BOOTSTRAP_SAMPLE', raising=False)
@@ -159,3 +160,15 @@ def test_railway_bootstrap_requires_opt_in_and_preserves_existing(tmp_path, monk
     destination.write_text('{"preserved": true}', encoding='utf-8')
     assert bootstrap_records() == destination
     assert destination.read_text(encoding='utf-8') == '{"preserved": true}'
+
+
+def test_pythonanywhere_entrypoint_bootstraps_configured_records(tmp_path, monkeypatch):
+    destination = tmp_path / 'pythonanywhere-data' / 'records.json'
+    monkeypatch.setenv('LIBRARY_RECORDS', str(destination))
+    monkeypatch.setenv('LIBRARY_BOOTSTRAP_SAMPLE', 'true')
+
+    module = importlib.import_module('pythonanywhere_asgi')
+    importlib.reload(module)
+
+    assert destination.exists()
+    assert module.app.title == 'Library congestion v1'

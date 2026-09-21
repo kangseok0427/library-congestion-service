@@ -1,4 +1,4 @@
-"""Production entry point for Railway and other container platforms."""
+"""Production entry point for container platforms such as Railway."""
 import os
 import shutil
 from pathlib import Path
@@ -20,7 +20,7 @@ def bootstrap_records():
     if os.environ.get('LIBRARY_BOOTSTRAP_SAMPLE', '').lower() not in {'1', 'true', 'yes'}:
         raise RuntimeError(
             f'LIBRARY_RECORDS 파일이 없습니다: {destination}. '
-            '빈 Volume의 첫 배포라면 LIBRARY_BOOTSTRAP_SAMPLE=true를 설정하세요.'
+            '빈 저장공간의 첫 배포라면 LIBRARY_BOOTSTRAP_SAMPLE=true를 설정하세요.'
         )
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f'.{destination.name}.bootstrap')
