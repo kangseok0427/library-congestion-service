@@ -1,5 +1,8 @@
 # Railway PaaS 배포·운영 인수인계
 
+> 현재 수요일 MVP 배포 대상은 PythonAnywhere 무료 계정입니다. 이 문서는 향후 유료
+> PaaS 전환을 다시 검토할 때를 위해 보존하며 현재 배포 절차로 사용하지 않습니다.
+
 ## 확정 구조
 
 `도서관 PC Excel 변환기 → 인증 업로드 API → Railway Volume의 records.json → FastAPI → 이용자 웹`
