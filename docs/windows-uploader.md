@@ -2,7 +2,7 @@
 
 ## 현재 상태
 
-T12 업로드 API 구현과 계약은 이 저장소의 `develop`에 없습니다. **T12 API 계약 확정 후 실제 endpoint 연결 필요**. 프로그램은 운영 주소를 내장하지 않습니다. `https://ade0033.pythonanywhere.com/`은 배포 호스트로 알려져 있지만 업로드 경로가 아닙니다. 현재 클라이언트의 `POST` + JSON records 배열 + `Authorization: Bearer`는 Mock 검증용 임시 계약입니다. T12에서 endpoint, method, 인증 헤더, 요청 본문, 크기 제한, 성공·오류 응답, 반영 방식을 확인한 뒤 `windows_uploader/upload.py`와 통합 테스트를 맞춰야 합니다. 실제 토큰이나 실제 원본을 넣어 운영 업로드를 시도하지 마세요.
+T12 업로드 API 구현과 계약은 이 저장소의 `develop`에 없습니다. **T12 API 계약 확정 후 실제 endpoint 연결 필요**. `https://ade0033.pythonanywhere.com/`은 승인된 운영 호스트로만 등록되어 있으며 업로드 경로가 아닙니다. 정확한 endpoint가 미설정인 현재 운영 모드는 전송을 차단합니다. Mock 모드는 가짜 전송 함수를 주입한 테스트에서만 사용할 수 있습니다. 현재 클라이언트의 `POST` + JSON records 배열 + `Authorization: Bearer`는 Mock 검증용 임시 계약입니다. T12에서 endpoint, method, 인증 헤더, 요청 본문, 크기 제한, 성공·오류 응답, 반영 방식을 확인한 뒤 `windows_uploader/upload.py`와 통합 테스트를 맞춰야 합니다.
 
 ## 개발 PC 실행
 
@@ -10,11 +10,11 @@ Windows 10/11, Python 3.12 이상에서 저장소 루트의 PowerShell을 사용
 
 ```powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-windows-uploader.txt
 .\.venv\Scripts\python.exe -m windows_uploader
 ```
 
-Excel을 선택하고 HTTPS 업로드 주소를 입력합니다. 토큰은 마스킹된 칸에서 Windows Credential Manager에 저장하며 화면으로 다시 읽어오지 않습니다. 주소만 `%LOCALAPPDATA%\YongsanLibraryUploader\config.json`에 저장합니다. 최근 성공 시각은 `state.json`, 로그는 `logs`, 업로드 직전 검증된 JSON 백업은 `backups`, 처리 중 임시 JSON은 `temp`에 보관됩니다. 로컬 최신 정상 결과는 같은 폴더의 `records.json`입니다. 변환·백업·전송 실패 시 최신 정상 결과와 최근 성공 시각은 유지됩니다. 부분 날짜 정책은 기존 `library_etl.refresh`의 보수적 기본값을 사용하며, 완료 그룹을 부분 데이터로 덮어쓰지 않습니다.
+Excel을 선택하고 HTTPS 업로드 주소를 입력합니다. 정확한 T12 endpoint가 승인되기 전에는 변환·전송 시작이 차단됩니다. 토큰은 마스킹된 칸에서 Windows Credential Manager에 저장하며 화면으로 다시 읽어오지 않습니다. 주소만 `%LOCALAPPDATA%\YongsanLibraryUploader\config.json`에 저장합니다. 최근 성공 시각은 `state.json`, 로그는 `logs`, 업로드 직전 검증된 JSON 백업은 `backups`, 처리 중 임시 JSON은 `temp`에 보관됩니다. 로컬 최신 정상 결과는 같은 폴더의 `records.json`입니다. 백업은 최근 20개만 보관합니다. 변환·백업·전송 실패 시 최신 정상 결과와 최근 성공 시각은 유지됩니다. 부분 날짜 정책은 기존 `library_etl.refresh`의 보수적 기본값을 사용하며, 완료 그룹을 부분 데이터로 덮어쓰지 않습니다.
 
 ## Python 없는 PC용 빌드
 

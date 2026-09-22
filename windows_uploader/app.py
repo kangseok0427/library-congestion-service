@@ -1,5 +1,6 @@
 """Windows Tkinter operator UI."""
 import os
+import queue
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -15,6 +16,7 @@ class UploaderApp:
         self.store = LocalStore()
         self.credentials = Credentials()
         self.busy = False
+        self.events = queue.Queue()
         root.title("용산꿈나무도서관 Excel 변환·전송")
         root.geometry("690x350")
         frame = ttk.Frame(root, padding=18)
@@ -63,32 +65,45 @@ class UploaderApp:
         if self.busy:
             return
         try:
+            source = str(self.source.get())
             endpoint = validate_endpoint(self.endpoint.get().strip())
             if not self.credentials.exists():
                 raise ValueError("인증 토큰을 먼저 저장하세요.")
-            if not self.source.get().lower().endswith(".xlsx"):
+            if not source.lower().endswith(".xlsx"):
                 raise ValueError(".xlsx Excel 파일을 선택하세요.")
+            UploadClient(endpoint)  # Production policy must approve T12 before any work begins.
             self.store.save_config(endpoint)
         except Exception:
-            messagebox.showerror("입력 확인", "Excel 파일, HTTPS 주소와 저장된 토큰을 확인하세요.")
+            messagebox.showerror("입력 확인", "Excel 파일, HTTPS 주소와 저장된 토큰을 확인하세요. T12 API 계약 확정 후 실제 endpoint 연결 필요")
             return
         self.busy = True
         self.run_button.configure(state="disabled")
         self.status.set("작업 시작")
-        threading.Thread(target=self._worker, args=(endpoint,), daemon=True).start()
+        threading.Thread(target=self._worker, args=(source, endpoint), daemon=True).start()
+        self.root.after(50, self._drain_events)
 
-    def _worker(self, endpoint):
+    def _worker(self, source, endpoint):
         try:
-            result = process(self.source.get(), self.store, self.credentials,
-                             UploadClient(endpoint), self._progress)
+            result = process(source, self.store, self.credentials,
+                             UploadClient(endpoint), lambda message: self.events.put(("progress", message)))
         except Exception as exc:
             # Core returns sanitized errors only; never display transport exception text.
-            self.root.after(0, self._finish, False, str(exc), None)
+            self.events.put(("finish", False, str(exc), None))
         else:
-            self.root.after(0, self._finish, True, "전송 완료", result["last_success"])
+            self.events.put(("finish", True, "전송 완료", result["last_success"]))
 
-    def _progress(self, message):
-        self.root.after(0, self.status.set, message)
+    def _drain_events(self):
+        while True:
+            try:
+                event = self.events.get_nowait()
+            except queue.Empty:
+                break
+            if event[0] == "progress":
+                self.status.set(event[1])
+            else:
+                self._finish(*event[1:])
+        if self.busy:
+            self.root.after(50, self._drain_events)
 
     def _finish(self, success, message, when):
         self.busy = False

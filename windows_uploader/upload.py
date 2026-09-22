@@ -10,11 +10,18 @@ class UploadError(RuntimeError):
     pass
 
 
+# Set only after T12 defines the full path, method, authentication, and payload.
+PRODUCTION_UPLOAD_ENDPOINT = None
+APPROVED_PRODUCTION_HOSTS = frozenset({"ade0033.pythonanywhere.com"})
+
+
 def validate_endpoint(endpoint):
     try:
         parsed = urlsplit(endpoint)
-        if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
-                or parsed.fragment or any(c.isspace() for c in endpoint)):
+        if (parsed.scheme != "https" or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or "?" in endpoint or "#" in endpoint
+                or any(c.isspace() for c in endpoint)):
             raise ValueError()
         if parsed.port is not None and not 1 <= parsed.port <= 65535:
             raise ValueError()
@@ -24,10 +31,20 @@ def validate_endpoint(endpoint):
 
 
 class UploadClient:
-    def __init__(self, endpoint, *, transport=urlopen, sleeper=time.sleep, retries=2, timeout=20,
-                 auth_headers=None, method="POST", encode=None):
+    def __init__(self, endpoint, *, mode="production", approved_endpoint=PRODUCTION_UPLOAD_ENDPOINT,
+                 approved_hosts=APPROVED_PRODUCTION_HOSTS, transport=None, sleeper=time.sleep,
+                 retries=2, timeout=20, auth_headers=None, method="POST", encode=None):
         self.endpoint = validate_endpoint(endpoint)
-        self.transport = transport
+        if mode == "production":
+            approved = validate_endpoint(approved_endpoint) if approved_endpoint else None
+            if (not approved or self.endpoint != approved
+                    or urlsplit(self.endpoint).hostname not in approved_hosts):
+                raise UploadError("T12 API 계약 확정 후 승인된 업로드 주소 연결이 필요합니다.")
+            self.transport = transport or urlopen
+        elif mode == "mock" and transport is not None and transport is not urlopen:
+            self.transport = transport
+        else:
+            raise UploadError("Mock 모드에는 가짜 전송 함수가 필요합니다.")
         self.sleeper = sleeper
         self.retries = retries
         self.timeout = timeout

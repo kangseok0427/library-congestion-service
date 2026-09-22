@@ -8,6 +8,8 @@ from pathlib import Path
 
 
 SERVICE = "YongsanLibraryUploader"
+MAX_BACKUPS = 20
+BACKUP_NAME = re.compile(r"records-\d{8}-\d{6}-\d{6}\.json\Z")
 
 
 def app_home():
@@ -74,7 +76,26 @@ class LocalStore:
         except BaseException:
             target.unlink(missing_ok=True)
             raise
+        try:
+            self._prune_backups()
+        except OSError:
+            # A completed backup remains valid even if listing or cleanup fails.
+            pass
         return target
+
+    def _prune_backups(self):
+        # The fixed-width timestamp makes filename order chronological. Only files
+        # created by this app are eligible; cleanup is best effort after a durable backup.
+        backups = sorted((path for path in self.backups.iterdir()
+                          if path.is_file() and BACKUP_NAME.fullmatch(path.name)))
+        for old in backups[:-MAX_BACKUPS]:
+            try:
+                old.unlink()
+            except OSError:
+                try:
+                    self.log("오래된 백업 정리 실패")
+                except OSError:
+                    pass
 
     def log(self, message):
         # Caller supplies fixed operational messages; reject credential-like text defensively.
