@@ -13,7 +13,8 @@ def rebuild(records, destination):
     service=LibraryService(records)  # validate + recompute before publishing
     json.dumps(service.today(), allow_nan=False)
     json.dumps(service.patterns(), allow_nan=False)
-    for day in sorted({r['date'] for r in service.records}):
+    # Raw-only out-of-hours dates are valid inputs, even with no service stats.
+    for day in sorted({r['date'] for r in service.service_rows}):
         json.dumps(service.stats(day), allow_nan=False)
     destination=Path(destination);destination.parent.mkdir(parents=True,exist_ok=True)
     fd,temp=tempfile.mkstemp(dir=destination.parent,suffix='.tmp')

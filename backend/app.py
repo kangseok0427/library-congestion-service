@@ -11,8 +11,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
-from .domain import HOURS, LEVELS, DataError, parse_date
+from .domain import LEVELS, DataError
 from .service import KST, LibraryService
+from .library_hours import DEFAULT_HOURS, date_window, now_kst, validate_service_date
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -47,7 +48,7 @@ class FileProvider:
                 raise DataError('records 파일을 읽을 수 없습니다.') from exc
 
 
-def create_app(provider=None):
+def create_app(provider=None, clock=now_kst):
     path = os.environ.get('LIBRARY_RECORDS')
     provider = provider or FileProvider(path or ROOT / 'data/sample/records.json', sample=not bool(path))
     app = FastAPI(title='Library congestion v1')
@@ -67,16 +68,22 @@ def create_app(provider=None):
 
     @app.get('/api/v1/meta')
     def meta():
-        return dict(library_name='용산꿈나무도서관', available_hours=HOURS, levels=LEVELS,
-                    hours_note='데이터 수집 시간대입니다. 실제 운영시간은 도서관 공지를 확인하세요.')
+        now = clock().astimezone(KST)
+        return dict(library_name='용산꿈나무도서관', available_hours=DEFAULT_HOURS.hours(now.date()), levels=LEVELS,
+                    date_window=date_window(now),
+                    hours_note='평일 09:00~21:00 · 주말 09:00~17:00 · 매주 월요일 및 등록된 휴관일 제외. 시간 라벨은 현장 확인 전 임시 기준입니다.')
 
     @app.get('/api/v1/congestion/today')
     def today(date: str | None = None):
-        return provider.get().today(target=parse_date(date) if date else None)
+        now = clock().astimezone(KST)
+        target = validate_service_date(date, now) if date is not None else now.date()
+        return provider.get().today(now=now, target=target)
 
     @app.get('/api/v1/stats')
     def stats(date: str):
-        return provider.get().stats(date)
+        now = clock().astimezone(KST)
+        validate_service_date(date, now)
+        return provider.get().stats(date, now=now)
 
     @app.get('/api/v1/patterns')
     def patterns():

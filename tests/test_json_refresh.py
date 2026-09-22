@@ -2,7 +2,7 @@
 import copy
 import json
 import os
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -12,6 +12,7 @@ from openpyxl import Workbook
 
 from backend.app import FileProvider, create_app
 from backend.domain import DataError, validate_records
+from backend.library_hours import KST
 from scripts.rebuild import rebuild
 from scripts.sample import generate
 
@@ -42,7 +43,7 @@ def active(tmp_path):
     records[0].update(is_closed_day=None, is_low_volume=False, quality_note='retained')
     # Seed a v1 file directly: testing the new validator is a separate assertion.
     path.write_text(json.dumps(records), encoding='utf-8')
-    client = TestClient(create_app(FileProvider(path)))
+    client = TestClient(create_app(FileProvider(path), clock=lambda: datetime(2026,9,10,12,tzinfo=KST)))
     return path, client
 
 
@@ -66,7 +67,7 @@ def test_refresh_success_idempotence_history_and_api(active, tmp_path):
     report = refresh(source, path, partial_dates=[], rebuild_fn=rebuild_spy)
     after = snapshot(path, client)
     assert after[0] != before[0] and after[2]['total_in'] == 1998
-    assert after[2]['hourly'][3]['out_count'] is None
+    assert after[2]['hourly'][2]['out_count'] is None
     assert after[2]['hourly_total_out'] is None
     assert after[2]['total_out'] == 1776
     assert rebuild_spy.call_count == 1
@@ -123,9 +124,9 @@ def test_v1_and_v11_quality_and_null_api(tmp_path):
     rebuild(records, path)
     saved = json.loads(path.read_text(encoding='utf-8'))
     assert all(r['is_low_volume'] is True and r['is_closed_day'] is None for r in saved)
-    client = TestClient(create_app(FileProvider(path)))
+    client = TestClient(create_app(FileProvider(path), clock=lambda: datetime(2026,9,10,12,tzinfo=KST)))
     data = client.get('/api/v1/stats?date=2026-09-10').json()
-    assert data['hourly'][3]['out_count'] is None
+    assert data['hourly'][2]['out_count'] is None
     assert data['hourly_total_out'] is None
     assert data['hourly'][0]['quality_note'] == 'HOURLY_TOTAL_MISMATCH'
 
@@ -174,7 +175,7 @@ def test_single_gate_null_propagates_without_changing_daily_total(tmp_path):
     next(r for r in rows if r['hour'] == 11)['out_count'] = None
     service = rebuild(rows, tmp_path / 'records.json')
     data = service.stats('2026-09-10')
-    assert data['hourly'][3]['out_count'] is None
+    assert data['hourly'][2]['out_count'] is None
     assert data['hourly_total_out'] is None
     assert data['total_out'] == sum(r['total_out'] for r in rows if r['hour'] == 8)
 
