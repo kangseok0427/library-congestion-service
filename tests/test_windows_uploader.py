@@ -17,10 +17,10 @@ from windows_uploader.upload import UploadClient, UploadError, validate_endpoint
 
 
 class Response:
-    status = 204
+    def __init__(self, body=b"", status=204): self.body = body; self.status = status
     def __enter__(self): return self
     def __exit__(self, *args): return None
-    def read(self): return b""
+    def read(self): return self.body
 
 
 class Credentials:
@@ -28,11 +28,16 @@ class Credentials:
 
 
 class Transport:
-    def __init__(self, sequence):
+    def __init__(self, sequence, baseline=None):
         self.sequence = iter(sequence)
         self.calls = []
+        self.download_calls = []
+        self.baseline = baseline if baseline is not None else generate(end=date(2026, 9, 9), days=1)
 
     def __call__(self, request, timeout):
+        if request.get_method() == "GET":
+            self.download_calls.append((request, timeout))
+            return Response(json.dumps(self.baseline).encode("utf-8"), status=200)
         self.calls.append((request, timeout))
         result = next(self.sequence)
         if isinstance(result, Exception):
@@ -40,8 +45,8 @@ class Transport:
         return result
 
 
-def client(sequence, retries=2):
-    transport = Transport(sequence)
+def client(sequence, retries=2, baseline=None):
+    transport = Transport(sequence, baseline)
     return UploadClient("https://example.test/private", mode="mock", transport=transport,
                         sleeper=lambda _: None, retries=retries), transport
 
@@ -70,6 +75,16 @@ def test_upload_success_and_token_not_in_error_or_logs(tmp_path):
     assert json.loads(request.data) == records
     store.log("Authorization: Bearer SENSITIVE_TEST_VALUE")
     assert "SENSITIVE_TEST_VALUE" not in (store.logs / "uploader.log").read_text(encoding="utf-8")
+
+
+def test_download_success_and_token_not_exposed():
+    records = generate(end=date(2026, 9, 10), days=2)
+    upload, transport = client([], baseline=records)
+    assert upload.fetch("SENSITIVE_TEST_VALUE") == records
+    request, timeout = transport.download_calls[0]
+    assert request.get_method() == "GET"
+    assert request.get_header("Authorization") == "Bearer SENSITIVE_TEST_VALUE"
+    assert timeout == 20
 
 
 def test_upload_contract_hooks_can_follow_t12():
@@ -271,12 +286,38 @@ def test_process_convert_null_backup_and_repeat(tmp_path, monkeypatch):
     first = process(source, store, Credentials(), upload)
     rows = json.loads(store.records.read_text(encoding="utf-8"))
     assert validate_records(rows) == rows
-    assert all(r["out_count"] is None for r in rows if r["hour"] == 11)
+    assert all(r["out_count"] is None for r in rows
+               if r["date"] == "2026-09-10" and r["hour"] == 11)
     assert first["backup"].read_bytes() == store.records.read_bytes()
     assert store.last_success() == first["last_success"]
     second = process(source, store, Credentials(), upload)
     assert json.loads(store.records.read_text(encoding="utf-8")) == rows
     assert second["backup"].exists() and len(transport.calls) == 2
+
+
+def test_first_run_merges_excel_into_server_baseline_before_upload(tmp_path):
+    store = LocalStore(tmp_path / "user")
+    baseline = generate(end=date(2026, 9, 9), days=3)
+    source = excel(tmp_path / "latest.xlsx", value=17, day="2026-09-10")
+    upload, transport = client([Response()], baseline=baseline)
+    result = process(source, store, Credentials(), upload)
+    uploaded = json.loads(transport.calls[0][0].data)
+    assert len({r["date"] for r in uploaded}) == 4
+    assert {r["date"] for r in uploaded} == {r["date"] for r in baseline} | {"2026-09-10"}
+    assert any(r["date"] == "2026-09-10" and r["in_count"] == 17 for r in uploaded)
+    assert json.loads(store.records.read_text(encoding="utf-8")) == uploaded
+    assert result["report"]["record_count"] == len(uploaded)
+
+
+def test_completed_server_date_is_not_replaced_by_partial_excel(tmp_path):
+    store = LocalStore(tmp_path / "user")
+    baseline = generate(end=date(2026, 9, 10), days=1)
+    source = excel(tmp_path / "overlap.xlsx", value=17, day="2026-09-10")
+    upload, transport = client([Response()], baseline=baseline)
+    with pytest.raises(ValueError):
+        process(source, store, Credentials(), upload)
+    assert not transport.calls
+    assert not store.records.exists()
 
 
 def test_failed_conversion_backup_and_upload_preserve_live_and_state(tmp_path, monkeypatch):

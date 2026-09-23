@@ -5,13 +5,15 @@
 ADE-35 업로드 API와 Windows 프로그램은 다음 계약을 사용합니다.
 
 - endpoint: `https://ade0033.pythonanywhere.com/api/v1/admin/records`
-- method: `POST`
+- method: 기존 전체 기록은 `GET`, 검증된 갱신본은 `POST`
 - 인증: `Authorization: Bearer <ADMIN_UPLOAD_TOKEN>`
 - body: 공통 스키마의 전체 records JSON 배열
 - 최대 크기: 5MB
 - 성공: HTTP 200과 `accepted`, `record_count`, `changed`, `previous_backup`, `uploaded_at`
 
-서버는 인증과 전체 스키마 검증을 통과한 경우에만 운영 파일을 원자 교체합니다. 기존
+프로그램은 매 작업 시작 시 서버의 최신 전체 기록을 먼저 인증 다운로드한 뒤 선택한
+Excel의 날짜·게이트만 교체합니다. 따라서 PC 첫 실행이나 다른 PC에서 갱신한 뒤에도
+부분 Excel만으로 서버의 과거 기록을 잃지 않습니다. 서버는 인증과 전체 스키마 검증을 통과한 경우에만 운영 파일을 원자 교체합니다. 기존
 파일은 교체 전에 백업하며, 동일 스냅샷 재전송은 성공으로 응답하되 파일과 백업을 다시
 만들지 않습니다. Mock 모드는 가짜 전송 함수를 주입한 자동 테스트에서만 사용합니다.
 

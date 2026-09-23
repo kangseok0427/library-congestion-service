@@ -56,28 +56,41 @@ class UploadClient:
     def send(self, records, token):
         if not token:
             raise UploadError("저장된 인증 토큰이 없습니다.")
-        # The records-array body and POST method are provisional and configurable
-        # only for mock/integration work until T12 publishes its contract.
         body = self.encode(records)
-        for attempt in range(self.retries + 1):
-            request = Request(self.endpoint, data=body, method=self.method, headers={
+        status, _ = self._perform(lambda: Request(
+            self.endpoint, data=body, method=self.method, headers={
                 "Content-Type": "application/json", **self.auth_headers(token),
-            })
+            }), "업로드")
+        return status
+
+    def fetch(self, token):
+        if not token:
+            raise UploadError("저장된 인증 토큰이 없습니다.")
+        _, payload = self._perform(lambda: Request(
+            self.endpoint, method="GET", headers=self.auth_headers(token)), "기존 기록 다운로드")
+        try:
+            return json.loads(payload.decode("utf-8-sig"))
+        except (ValueError, UnicodeError):
+            raise UploadError("서버 기존 기록의 JSON 형식이 올바르지 않습니다.") from None
+
+    def _perform(self, request_factory, operation):
+        for attempt in range(self.retries + 1):
             try:
-                with self.transport(request, timeout=self.timeout) as response:
+                with self.transport(request_factory(), timeout=self.timeout) as response:
                     status = response.status
-                    response.read()
+                    payload = response.read()
             except HTTPError as exc:
                 status = exc.code
+                payload = b""
             except (URLError, TimeoutError, OSError) as exc:
                 if attempt < self.retries:
                     self.sleeper(min(2 ** attempt, 4))
                     continue
-                raise UploadError("네트워크 연결 또는 응답 시간 초과로 업로드에 실패했습니다.") from None
+                raise UploadError(f"네트워크 연결 또는 응답 시간 초과로 {operation}에 실패했습니다.") from None
             if 200 <= status < 300:
-                return status
+                return status, payload
             if 500 <= status < 600 and attempt < self.retries:
                 self.sleeper(min(2 ** attempt, 4))
                 continue
-            raise UploadError(f"업로드가 거부되었습니다. HTTP {status}")
-        raise UploadError("업로드 재시도 횟수를 초과했습니다.")
+            raise UploadError(f"{operation}이 거부되었습니다. HTTP {status}")
+        raise UploadError(f"{operation} 재시도 횟수를 초과했습니다.")

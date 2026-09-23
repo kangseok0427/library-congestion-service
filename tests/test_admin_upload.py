@@ -51,6 +51,16 @@ def test_authenticated_upload_replaces_live_snapshot_and_creates_backup(upload_s
     assert '"result": "success"' in log and TOKEN not in log
 
 
+def test_authenticated_download_returns_current_full_snapshot(upload_service):
+    path, client, original = upload_service
+    response = client.get('/api/v1/admin/records',
+                          headers={'Authorization': f'Bearer {TOKEN}'})
+    assert response.status_code == 200
+    assert response.json() == validate_records(original)
+    assert client.get('/api/v1/admin/records').status_code == 401
+    assert path.read_bytes()
+
+
 def test_retry_of_same_snapshot_is_idempotent(upload_service):
     path, client, _ = upload_service
     replacement = generate(end=date(2026, 9, 10), days=3)
@@ -171,5 +181,6 @@ def test_windows_client_to_fastapi_contract_end_to_end(upload_service):
         return Response(response)
 
     uploader = UploadClient(PRODUCTION_UPLOAD_ENDPOINT, transport=transport, retries=0)
+    assert uploader.fetch(TOKEN) == validate_records(generate(end=date(2026, 9, 10), days=2))
     assert uploader.send(replacement, TOKEN) == 200
     assert json.loads(path.read_text(encoding='utf-8')) == validate_records(replacement)
