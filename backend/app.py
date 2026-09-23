@@ -102,6 +102,22 @@ def create_app(provider=None, clock=now_kst, upload_token=None,
                     changed=result['changed'], previous_backup=result['backup'],
                     uploaded_at=datetime.now(KST).isoformat())
 
+    @app.get('/api/v1/admin/records')
+    def download_records(request: Request):
+        try:
+            if publisher is None:
+                raise UploadAPIError('이 실행 환경에서는 다운로드 기능을 사용할 수 없습니다.',
+                                     'UPLOAD_DISABLED', 503)
+            expected = upload_token if upload_token is not None else os.environ.get('ADMIN_UPLOAD_TOKEN')
+            require_token(request.headers.get('authorization'), expected)
+            records = provider.get().records
+        except UploadAPIError as exc:
+            if publisher is not None:
+                publisher.log('rejected', exc.code)
+            raise
+        publisher.log('success', 'READ_OK', len(records), False)
+        return records
+
     @app.get('/api/v1/meta')
     def meta():
         now = clock().astimezone(KST)

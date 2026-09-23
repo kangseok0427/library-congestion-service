@@ -118,11 +118,13 @@ ADE-35 배포 후에는 웹앱 실행 환경에 `ADMIN_UPLOAD_TOKEN`을 추가�
 사용합니다. 토큰은 충분히 긴 무작위 값으로 생성하고 Git, 문서, 채팅에 올리지 않습니다.
 
 ```text
+GET  https://ade0033.pythonanywhere.com/api/v1/admin/records
 POST https://ade0033.pythonanywhere.com/api/v1/admin/records
 Authorization: Bearer <ADMIN_UPLOAD_TOKEN>
 ```
 
-정상 업로드는 운영 파일을 즉시 원자 교체하므로 별도 웹앱 reload 없이 다음 요청부터
+Windows 프로그램은 GET으로 서버 최신 스냅샷을 받은 뒤 Excel을 병합하고 POST로 전체
+검증본을 전송합니다. 정상 업로드는 운영 파일을 즉시 원자 교체하므로 별도 웹앱 reload 없이 다음 요청부터
 반영됩니다. 서버 백업은 `~/library-congestion-data/backups`, 업로드 로그는
 `~/library-congestion-data/logs/admin-upload.log`에 저장됩니다.
 

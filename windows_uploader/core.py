@@ -1,6 +1,6 @@
 """Tk independent conversion, validation, backup and upload orchestration."""
+import json
 import os
-import shutil
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,9 +14,14 @@ def process(source, store, credentials, client, progress=lambda message: None):
     source = Path(source)
     staged = store.temp / f"records-{uuid4().hex}.json"
     try:
-        progress("Excel 변환 및 기존 기록 병합 중")
-        if store.records.exists():
-            shutil.copy2(store.records, staged)
+        token = credentials.get()
+        progress("서버 기존 기록 내려받는 중")
+        baseline = validate_records(client.fetch(token))
+        if not baseline:
+            raise ValueError("서버 기존 기록이 비어 있습니다.")
+        staged.write_text(json.dumps(baseline, ensure_ascii=False, allow_nan=False),
+                          encoding="utf-8")
+        progress("Excel 변환 및 서버 기록 병합 중")
         report = refresh(source, staged)
         progress("변환 결과 검증 중")
         records = validate_records(read_records(staged))
@@ -25,7 +30,7 @@ def process(source, store, credentials, client, progress=lambda message: None):
         progress("로컬 백업 생성 중")
         backup = store.backup(staged)
         progress("HTTPS 업로드 중")
-        status = client.send(records, credentials.get())
+        status = client.send(records, token)
         os.replace(staged, store.records)
         when = store.save_success()
         store.log(f"업로드 성공: HTTP {status}, records {len(records)}")
