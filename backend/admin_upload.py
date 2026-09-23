@@ -12,7 +12,7 @@ from .domain import DataError, validate_records
 from scripts.rebuild import rebuild
 
 
-MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_BACKUPS = 20
 
 
@@ -39,7 +39,7 @@ async def read_json_body(request, limit=MAX_UPLOAD_BYTES):
     content_length = request.headers.get('content-length')
     try:
         if content_length is not None and int(content_length) > limit:
-            raise UploadAPIError('업로드 파일이 5MB 제한을 초과했습니다.',
+            raise UploadAPIError('업로드 파일이 50MB 제한을 초과했습니다.',
                                  'PAYLOAD_TOO_LARGE', 413)
     except ValueError:
         raise UploadAPIError('Content-Length가 올바르지 않습니다.', 'INVALID_REQUEST', 400)
@@ -47,7 +47,7 @@ async def read_json_body(request, limit=MAX_UPLOAD_BYTES):
     async for chunk in request.stream():
         payload.extend(chunk)
         if len(payload) > limit:
-            raise UploadAPIError('업로드 파일이 5MB 제한을 초과했습니다.',
+            raise UploadAPIError('업로드 파일이 50MB 제한을 초과했습니다.',
                                  'PAYLOAD_TOO_LARGE', 413)
     try:
         return json.loads(bytes(payload).decode('utf-8-sig'))

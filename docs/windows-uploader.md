@@ -8,7 +8,7 @@ ADE-35 업로드 API와 Windows 프로그램은 다음 계약을 사용합니다
 - method: 기존 전체 기록은 `GET`, 검증된 갱신본은 `POST`
 - 인증: `Authorization: Bearer <ADMIN_UPLOAD_TOKEN>`
 - body: 공통 스키마의 전체 records JSON 배열
-- 최대 크기: 5MB
+- 최대 크기: 50MB
 - 성공: HTTP 200과 `accepted`, `record_count`, `changed`, `previous_backup`, `uploaded_at`
 
 프로그램은 매 작업 시작 시 서버의 최신 전체 기록을 먼저 인증 다운로드한 뒤 선택한
