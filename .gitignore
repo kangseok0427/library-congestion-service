@@ -13,3 +13,5 @@ data/processed/
 work/
 test-results/
 playwright-report/
+build/
+dist/

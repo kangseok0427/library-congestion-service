@@ -80,3 +80,5 @@ python -m scripts.e2e --records data/processed/records.json --date 2026-09-10
 ```
 
 [구현·인터페이스·인수인계](docs/architecture.md) / [Git 협업](docs/git-workflow.md)
+
+도서관 PC용 Excel 변환·전송 프로그램: [ADE-37 Windows 안내](docs/windows-uploader.md).
