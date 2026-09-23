@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -15,21 +16,24 @@ from playwright.sync_api import sync_playwright, expect
 from openpyxl import Workbook
 from backend.adapters import read_records
 from backend.domain import DataError
+from backend.library_hours import DEFAULT_HOURS
 from library_etl import refresh
 from scripts.rebuild import rebuild
 from scripts.sample import generate
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--records');parser.add_argument('--date',default='2026-09-14');args=parser.parse_args()
-    records=read_records(args.records) if args.records else generate()
-    with tempfile.TemporaryDirectory() as directory:
+    parser=argparse.ArgumentParser();parser.add_argument('--records');parser.add_argument('--date',default='2026-09-22');args=parser.parse_args()
+    records=read_records(args.records) if args.records else generate(end=date.fromisoformat(args.date))
+    Path('test-results').mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir='test-results') as directory:
         path=Path(directory)/'records.json';service=rebuild(records,path)
-        expected=service.stats(args.date)['total_in']
+        expected=service.stats(args.date)['hourly_total_in']
+        count=len(DEFAULT_HOURS.hours(date.fromisoformat(args.date)))
         with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
         url=f'http://127.0.0.1:{port}'
-        process=subprocess.Popen([sys.executable,'-m','uvicorn','backend.app:app','--host','127.0.0.1','--port',str(port)],
-                                 env={**os.environ,'LIBRARY_RECORDS':str(path)},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        process=subprocess.Popen([sys.executable,'-m','uvicorn','tests.browser_app:app','--host','127.0.0.1','--port',str(port)],
+                                 env={**os.environ,'LIBRARY_RECORDS':str(path.resolve()),'E2E_DATE':args.date},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         try:
             for _ in range(100):
                 try:
@@ -38,19 +42,20 @@ def main():
             else:raise RuntimeError('Server did not start')
             with sync_playwright() as p:
                 browser=p.chromium.launch()
-                page=browser.new_page(viewport={'width':1280,'height':900})
+                page=browser.new_page(viewport={'width':1280,'height':900}, timezone_id='America/Los_Angeles')
+                page.clock.install(time=datetime.fromisoformat(args.date+'T08:00:00+09:00'))
                 page.goto(url)
                 page.locator('#date').fill(args.date);page.get_by_role('button',name='조회',exact=True).click()
                 expect(page.locator('#actual')).to_contain_text(f'IN {expected}명')
-                expect(page.locator('#hourly tr')).to_have_count(16)
-                assert page.locator('#chart .bar').count()==16
+                expect(page.locator('#hourly tr')).to_have_count(count)
+                assert page.locator('#chart .bar').count()==count
                 before=page.locator('#hourly').inner_text()
                 changed=copy.deepcopy(records)
                 for row in changed:
                     row['in_count']+=100;row['total_in']+=1600
                 rebuild(changed,path)
                 page.get_by_role('button',name='새로고침').click()
-                expect(page.locator('#actual')).to_contain_text(f'IN {expected+3200}명')
+                expect(page.locator('#actual')).to_contain_text(f'IN {expected+count*200}명')
                 assert before!=page.locator('#hourly').inner_text()
                 # Exercise T02/T08 with a real synthetic XLSX, not only JSON.
                 if not args.records:
@@ -62,15 +67,45 @@ def main():
                     source=Path(directory)/'refresh.xlsx';book.save(source)
                     refresh(source,path,partial_dates=[])
                     page.get_by_role('button',name='새로고침').click()
-                    expect(page.locator('#actual')).to_contain_text('IN 1554명')
-                    assert page.request.get(url+'/api/v1/stats?date='+args.date).json()['hourly'][3]['out_count'] is None
+                    expect(page.locator('#actual')).to_contain_text(f'IN {count*14}명')
+                    assert page.request.get(url+'/api/v1/stats?date='+args.date).json()['hourly'][2]['out_count'] is None
                     saved=path.read_bytes();sheet.cell(2,6).value='=1+1';book.save(source);book.close()
                     try:refresh(source,path,partial_dates=[])
                     except DataError:pass
                     else:raise AssertionError('Invalid workbook was accepted')
                     assert path.read_bytes()==saved
                     page.get_by_role('button',name='새로고침').click()
-                    expect(page.locator('#actual')).to_contain_text('IN 1554명')
+                    expect(page.locator('#actual')).to_contain_text(f'IN {count*14}명')
+                # All 8 dates, real server rules, independent of browser timezone.
+                first=date.fromisoformat(args.date)
+                expect(page.locator('#date')).to_have_attribute('min',args.date)
+                expect(page.locator('#date')).to_have_attribute('max',(first+timedelta(days=7)).isoformat())
+                for offset in range(8):
+                    target=first+timedelta(days=offset)
+                    day=target.isoformat()
+                    page.locator('#date').fill(day)
+                    page.get_by_role('button',name='조회',exact=True).click()
+                    if DEFAULT_HOURS.is_closed(target):
+                        expect(page.locator('#level')).to_have_text('휴관일')
+                        expect(page.locator('#best')).to_have_text('휴관일')
+                        expect(page.locator('#actual')).to_have_text('휴관일')
+                        expect(page.locator('#hourly tr')).to_have_count(0)
+                    else:
+                        expect(page.locator('#hourly tr')).to_have_count(len(DEFAULT_HOURS.hours(target)))
+                        if offset:expect(page.locator('#actual')).to_have_text('집계 전')
+                        expect(page.locator('#error')).to_be_hidden()
+                for offset in (-1,8):
+                    bad=(first+timedelta(days=offset)).isoformat()
+                    page.locator('#date').fill(bad)
+                    assert not page.locator('#date').evaluate('(el) => el.checkValidity()')
+                    page.get_by_role('button',name='새로고침').click()
+                    expect(page.locator('#error')).to_contain_text('오늘부터 7일 후')
+                    expect(page.locator('#hourly tr')).to_have_count(0)
+                    assert page.request.get(url+'/api/v1/congestion/today?date='+bad).status==400
+                    assert page.request.get(url+'/api/v1/stats?date='+bad).status==400
+                page.locator('#date').fill(args.date)
+                page.get_by_role('button',name='새로고침').click()
+                expect(page.locator('#hourly tr')).to_have_count(count)
                 page.set_viewport_size({'width':390,'height':844})
                 assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
                 Path('test-results').mkdir(exist_ok=True)
@@ -84,7 +119,7 @@ def main():
                 expect(page.locator('#hourly tr')).to_have_count(0)
                 browser.close()
             print(json.dumps({'e2e':'PASS','input':'real_records' if args.records else 'synthetic',
-                              'checks':['API to DOM','16 forecast rows and bars','record replacement updates actual and forecast',
+                              'checks':['API to DOM','operating-hour forecast rows and bars','8 KST dates including closed and pending states','past and +8 rejected in UI and API','America/Los_Angeles browser timezone','record replacement updates actual and forecast',
                                         '390px no page overflow','invalid replacement error and stale number removal']+
                                        (['synthetic XLSX refresh updates DOM','OUT_11 remains null',
                                          'invalid XLSX preserves JSON and DOM'] if not args.records else [])},ensure_ascii=False))

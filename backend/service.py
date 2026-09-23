@@ -1,31 +1,42 @@
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from statistics import mean
 
-from .domain import HOURS, LEVELS, DataError, aggregate, parse_date, validate_records, nullable_sum
+from .domain import LEVELS, DataError, aggregate, parse_date, validate_records, nullable_sum
 from .prediction import forecast, recommendation, historical, percentile
-
-KST = timezone(timedelta(hours=9))
+from .library_hours import DEFAULT_HOURS, KST, now_kst
 
 
 class LibraryService:
-    def __init__(self, records, updated_at=None, weeks=4, sample=False):
+    def __init__(self, records, updated_at=None, weeks=4, sample=False, policy=DEFAULT_HOURS):
         self.records = validate_records(records)
         self.rows = aggregate(self.records)
+        self.policy = policy
+        self.service_rows = policy.filter_rows(self.rows)
+        self.closed_dates = {r['date'] for r in self.rows if r.get('is_closed_day') is True}
         self.updated_at = updated_at or datetime.now(KST).isoformat()
         self.weeks = weeks
         self.sample = sample
 
-    def stats(self, day):
-        parse_date(day)
-        rows = [dict(r) for r in self.rows if r['date'] == day]
+    def is_closed(self, day):
+        return self.policy.is_closed(day) or day.isoformat() in self.closed_dates
+
+    def stats(self, day, now=None):
+        target = parse_date(day)
+        closed = self.is_closed(target)
+        if closed or target > (now or now_kst()).astimezone(KST).date():
+            return dict(date=day, data_status='closed' if closed else 'pending',
+                        message='휴관일' if closed else '집계 전', hourly=[],
+                        total_in=None, total_out=None, hourly_total_in=None,
+                        hourly_total_out=None, updated_at=self.updated_at)
+        rows = [dict(r) for r in self.service_rows if r['date'] == day]
         if not rows:
             raise DataError('해당 날짜의 데이터를 찾을 수 없습니다.', 'DATA_NOT_FOUND')
         # Daily source totals repeat 16 times; take each gate exactly once.
         gates = {r['gate']: r for r in self.records if r['date'] == day}
-        partial = len(rows) != len(HOURS) or any(r['is_partial'] for r in rows)
-        predictions = {p['hour']: p for p in forecast(self.rows, parse_date(day), self.weeks)}
-        history = historical(self.rows, parse_date(day), self.weeks)
+        partial = len(rows) != len(self.policy.hours(target)) or any(r['is_partial'] for r in rows)
+        predictions = {p['hour']: p for p in forecast(self.rows, target, self.weeks, self.policy)}
+        history = historical(self.rows, target, self.weeks, self.policy)
         for row in rows:
             baseline = predictions[row['hour']]['baseline_avg']
             row['baseline_avg'] = baseline
@@ -42,26 +53,33 @@ class LibraryService:
                     updated_at=self.updated_at)
 
     def today(self, now=None, target=None):
-        now = now or datetime.now(KST)
+        now = now or now_kst()
         now = now.astimezone(KST)
         target = target or now.date()
-        hourly = forecast(self.rows, target, self.weeks)
-        active = next((h for h in hourly if h['hour'] == now.hour), None) if target == now.date() else None
+        closed = self.is_closed(target)
+        hourly = forecast(self.rows, target, self.weeks, self.policy)
+        active = next((h for h in hourly if h['start_hour'] == now.hour), None) if target == now.date() else None
         level = active['level'] if active else None
-        minimum_hour = now.hour + (1 if now.minute or now.second else 0) if target == now.date() else 8
-        return dict(date=target.isoformat(), data_status='forecast', reference_time=now.isoformat(),
-                    congestion=dict(level=level, label=LEVELS.get(level, '예측 자료 없음' if active else '시간대별 예측 참고'),
+        minimum_hour = now.hour + (1 if now.minute or now.second or now.microsecond else 0) if target == now.date() else self.policy.bounds(target)[0]
+        reco = recommendation(hourly, minimum_hour)
+        if closed:
+            reco['message'] = '휴관일에는 방문 시간을 추천하지 않습니다.'
+        operating = self.policy.info(target)
+        operating.update(is_closed=closed, available_hours=tuple(h['hour'] for h in hourly))
+        return dict(date=target.isoformat(), data_status='closed' if closed else 'forecast', reference_time=now.isoformat(),
+                    operating=operating,
+                    congestion=dict(level=level, label='휴관일' if closed else LEVELS.get(level, '예측 자료 없음' if active else '시간대별 예측 참고'),
                                     score=active['score'] if active else None),
-                    recommendation=recommendation(hourly, minimum_hour), hourly=hourly,
+                    recommendation=reco, hourly=hourly,
                     updated_at=self.updated_at, is_sample=self.sample,
                     basis='과거 입장량 기준 예상 방문량 · 현재 체류인원 아님')
 
     def patterns(self):
         daily = defaultdict(list)
-        for row in self.rows:
+        for row in self.service_rows:
             daily[row['date']].append(row)
         complete = {day: sum(r['visit_count'] for r in rows) for day, rows in daily.items()
-                    if len(rows) == len(HOURS) and not any(r['is_partial'] for r in rows)}
+                    if len(rows) == len(self.policy.hours(parse_date(day))) and not any(r['is_partial'] for r in rows)}
         hours, weekdays, weekday_hours, months = (defaultdict(list) for _ in range(4))
         for day, count in complete.items():
             weekday = parse_date(day).strftime('%a')
