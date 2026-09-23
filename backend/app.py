@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
 from .domain import LEVELS, DataError
+from .admin_upload import (MAX_UPLOAD_BYTES, RecordsPublisher, UploadAPIError,
+                           read_json_body, require_token)
 from .service import KST, LibraryService
 from .library_hours import DEFAULT_HOURS, date_window, now_kst, validate_service_date
 
@@ -48,9 +50,11 @@ class FileProvider:
                 raise DataError('records 파일을 읽을 수 없습니다.') from exc
 
 
-def create_app(provider=None, clock=now_kst):
+def create_app(provider=None, clock=now_kst, upload_token=None,
+               max_upload_bytes=MAX_UPLOAD_BYTES):
     path = os.environ.get('LIBRARY_RECORDS')
     provider = provider or FileProvider(path or ROOT / 'data/sample/records.json', sample=not bool(path))
+    publisher = RecordsPublisher(provider.path) if hasattr(provider, 'path') else None
     app = FastAPI(title='Library congestion v1')
 
     @app.exception_handler(DataError)
@@ -65,6 +69,38 @@ def create_app(provider=None, clock=now_kst):
     @app.exception_handler(HTTPException)
     async def http_error(request, exc):
         return JSONResponse(status_code=exc.status_code, content={'error': {'code': 'DATA_NOT_FOUND', 'message': str(exc.detail)}})
+
+    @app.exception_handler(UploadAPIError)
+    async def upload_error(request, exc):
+        return JSONResponse(status_code=exc.status_code,
+                            content={'error': {'code': exc.code, 'message': str(exc)}})
+
+    @app.post('/api/v1/admin/records')
+    async def upload_records(request: Request):
+        try:
+            if publisher is None:
+                raise UploadAPIError('이 실행 환경에서는 업로드 기능을 사용할 수 없습니다.',
+                                     'UPLOAD_DISABLED', 503)
+            expected = upload_token if upload_token is not None else os.environ.get('ADMIN_UPLOAD_TOKEN')
+            require_token(request.headers.get('authorization'), expected)
+            records = await read_json_body(request, max_upload_bytes)
+            result = publisher.publish(records)
+        except UploadAPIError as exc:
+            if publisher is not None:
+                publisher.log('rejected', exc.code)
+            raise
+        except DataError as exc:
+            code = 'GATE_ROW_DUPLICATED' if '중복 date+gate+hour' in str(exc) else 'PROCESSING_ERROR'
+            publisher.log('rejected', code)
+            raise UploadAPIError('records 스키마 검증에 실패했습니다.', code, 422) from exc
+        except OSError as exc:
+            publisher.log('failed', 'PUBLISH_FAILED')
+            raise UploadAPIError('데이터 교체에 실패하여 기존 정상본을 유지했습니다.',
+                                 'PUBLISH_FAILED', 500) from exc
+        publisher.log('success', 'OK', result['record_count'], result['changed'])
+        return dict(accepted=True, record_count=result['record_count'],
+                    changed=result['changed'], previous_backup=result['backup'],
+                    uploaded_at=datetime.now(KST).isoformat())
 
     @app.get('/api/v1/meta')
     def meta():
@@ -91,7 +127,7 @@ def create_app(provider=None, clock=now_kst):
 
     @app.get('/api/v1/health')
     def health():
-        # Railway should only route traffic after the configured snapshot is
+        # Hosting should only route traffic after the configured snapshot is
         # readable and valid, not merely after the Python process has started.
         provider.get()
         return {'status': 'ok'}

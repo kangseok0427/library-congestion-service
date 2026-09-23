@@ -10,8 +10,8 @@ class UploadError(RuntimeError):
     pass
 
 
-# Set only after T12 defines the full path, method, authentication, and payload.
-PRODUCTION_UPLOAD_ENDPOINT = None
+# ADE-35 contract: POST records array with Authorization: Bearer token.
+PRODUCTION_UPLOAD_ENDPOINT = "https://ade0033.pythonanywhere.com/api/v1/admin/records"
 APPROVED_PRODUCTION_HOSTS = frozenset({"ade0033.pythonanywhere.com"})
 
 

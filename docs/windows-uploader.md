@@ -1,8 +1,19 @@
 # ADE-37 Windows Excel 변환·전송 프로그램
 
-## 현재 상태
+## 현재 계약
 
-T12 업로드 API 구현과 계약은 이 저장소의 `develop`에 없습니다. **T12 API 계약 확정 후 실제 endpoint 연결 필요**. `https://ade0033.pythonanywhere.com/`은 승인된 운영 호스트로만 등록되어 있으며 업로드 경로가 아닙니다. 정확한 endpoint가 미설정인 현재 운영 모드는 전송을 차단합니다. Mock 모드는 가짜 전송 함수를 주입한 테스트에서만 사용할 수 있습니다. 현재 클라이언트의 `POST` + JSON records 배열 + `Authorization: Bearer`는 Mock 검증용 임시 계약입니다. T12에서 endpoint, method, 인증 헤더, 요청 본문, 크기 제한, 성공·오류 응답, 반영 방식을 확인한 뒤 `windows_uploader/upload.py`와 통합 테스트를 맞춰야 합니다.
+ADE-35 업로드 API와 Windows 프로그램은 다음 계약을 사용합니다.
+
+- endpoint: `https://ade0033.pythonanywhere.com/api/v1/admin/records`
+- method: `POST`
+- 인증: `Authorization: Bearer <ADMIN_UPLOAD_TOKEN>`
+- body: 공통 스키마의 전체 records JSON 배열
+- 최대 크기: 5MB
+- 성공: HTTP 200과 `accepted`, `record_count`, `changed`, `previous_backup`, `uploaded_at`
+
+서버는 인증과 전체 스키마 검증을 통과한 경우에만 운영 파일을 원자 교체합니다. 기존
+파일은 교체 전에 백업하며, 동일 스냅샷 재전송은 성공으로 응답하되 파일과 백업을 다시
+만들지 않습니다. Mock 모드는 가짜 전송 함수를 주입한 자동 테스트에서만 사용합니다.
 
 ## 개발 PC 실행
 
@@ -14,7 +25,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m windows_uploader
 ```
 
-Excel을 선택하고 HTTPS 업로드 주소를 입력합니다. 정확한 T12 endpoint가 승인되기 전에는 변환·전송 시작이 차단됩니다. 토큰은 마스킹된 칸에서 Windows Credential Manager에 저장하며 화면으로 다시 읽어오지 않습니다. 주소만 `%LOCALAPPDATA%\YongsanLibraryUploader\config.json`에 저장합니다. 최근 성공 시각은 `state.json`, 로그는 `logs`, 업로드 직전 검증된 JSON 백업은 `backups`, 처리 중 임시 JSON은 `temp`에 보관됩니다. 로컬 최신 정상 결과는 같은 폴더의 `records.json`입니다. 백업은 최근 20개만 보관합니다. 변환·백업·전송 실패 시 최신 정상 결과와 최근 성공 시각은 유지됩니다. 부분 날짜 정책은 기존 `library_etl.refresh`의 보수적 기본값을 사용하며, 완료 그룹을 부분 데이터로 덮어쓰지 않습니다.
+승인된 업로드 주소는 기본으로 입력됩니다. 토큰은 마스킹된 칸에서 Windows Credential Manager에 저장하며 화면으로 다시 읽어오지 않습니다. 주소만 `%LOCALAPPDATA%\YongsanLibraryUploader\config.json`에 저장합니다. 최근 성공 시각은 `state.json`, 로그는 `logs`, 업로드 직전 검증된 JSON 백업은 `backups`, 처리 중 임시 JSON은 `temp`에 보관됩니다. 로컬 최신 정상 결과는 같은 폴더의 `records.json`입니다. 백업은 최근 20개만 보관합니다. 변환·백업·전송 실패 시 최신 정상 결과와 최근 성공 시각은 유지됩니다. 부분 날짜 정책은 기존 `library_etl.refresh`의 보수적 기본값을 사용하며, 완료 그룹을 부분 데이터로 덮어쓰지 않습니다.
 
 ## Python 없는 PC용 빌드
 
@@ -33,4 +44,6 @@ Excel을 선택하고 HTTPS 업로드 주소를 입력합니다. 정확한 T12 e
 git diff --check
 ```
 
-Mock 테스트는 HTTPS 검사, 토큰 비노출, 성공/실패 응답, 재시도, 전처리 재사용, `OUT_11` 결측, 백업과 상태 보존을 확인합니다. 운영 API 계약과 실제 운영 전송 검증은 포함하지 않습니다.
+자동 테스트는 HTTPS 검사, 토큰 비노출, 성공/실패 응답, 재시도, 전처리 재사용,
+`OUT_11` 결측, 서버 인증·크기 제한·원자 교체·백업·멱등 재전송을 확인합니다. 실제
+PythonAnywhere 전송은 운영 토큰을 설정한 뒤 Windows PC에서 별도로 검증합니다.
