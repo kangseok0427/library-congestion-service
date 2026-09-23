@@ -33,7 +33,7 @@ def validate_endpoint(endpoint):
 class UploadClient:
     def __init__(self, endpoint, *, mode="production", approved_endpoint=PRODUCTION_UPLOAD_ENDPOINT,
                  approved_hosts=APPROVED_PRODUCTION_HOSTS, transport=None, sleeper=time.sleep,
-                 retries=2, timeout=20, auth_headers=None, method="POST", encode=None):
+                 retries=2, timeout=60, auth_headers=None, method="POST", encode=None):
         self.endpoint = validate_endpoint(endpoint)
         if mode == "production":
             approved = validate_endpoint(approved_endpoint) if approved_endpoint else None

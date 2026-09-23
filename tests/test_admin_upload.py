@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import FileProvider, create_app
+from backend.admin_upload import MAX_UPLOAD_BYTES
 from backend.domain import validate_records
 from backend.library_hours import KST
 from scripts.rebuild import rebuild
@@ -16,6 +17,10 @@ from windows_uploader.upload import PRODUCTION_UPLOAD_ENDPOINT, UploadClient
 
 
 TOKEN = 'synthetic-admin-token'
+
+
+def test_production_upload_limit_allows_real_history_snapshots():
+    assert MAX_UPLOAD_BYTES == 50 * 1024 * 1024
 
 
 @pytest.fixture
@@ -175,7 +180,7 @@ def test_windows_client_to_fastapi_contract_end_to_end(upload_service):
             return self.body
 
     def transport(request, timeout):
-        assert timeout == 20
+        assert timeout == 60
         response = api.request(request.get_method(), urlsplit(request.full_url).path,
                                content=request.data, headers=dict(request.header_items()))
         return Response(response)
