@@ -180,7 +180,7 @@ def test_windows_client_to_fastapi_contract_end_to_end(upload_service):
             return self.body
 
     def transport(request, timeout):
-        assert timeout == 60
+        assert timeout == 20 * 60
         response = api.request(request.get_method(), urlsplit(request.full_url).path,
                                content=request.data, headers=dict(request.header_items()))
         return Response(response)

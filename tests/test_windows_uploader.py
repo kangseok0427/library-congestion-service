@@ -79,7 +79,7 @@ def test_upload_success_and_token_not_in_error_or_logs(tmp_path):
     assert upload.send(records, Credentials().get()) == 204
     request, timeout = transport.calls[0]
     assert request.get_header("Authorization") == "Bearer SENSITIVE_TEST_VALUE"
-    assert timeout == 60
+    assert timeout == 20 * 60
     assert json.loads(request.data) == records
     store.log("Authorization: Bearer SENSITIVE_TEST_VALUE")
     assert "SENSITIVE_TEST_VALUE" not in (store.logs / "uploader.log").read_text(encoding="utf-8")
@@ -92,7 +92,7 @@ def test_download_success_and_token_not_exposed():
     request, timeout = transport.download_calls[0]
     assert request.get_method() == "GET"
     assert request.get_header("Authorization") == "Bearer SENSITIVE_TEST_VALUE"
-    assert timeout == 60
+    assert timeout == 20 * 60
 
 
 def test_upload_contract_hooks_can_follow_t12():
