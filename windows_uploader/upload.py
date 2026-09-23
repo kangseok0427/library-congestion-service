@@ -13,6 +13,7 @@ class UploadError(RuntimeError):
 # ADE-35 contract: POST records array with Authorization: Bearer token.
 PRODUCTION_UPLOAD_ENDPOINT = "https://ade0033.pythonanywhere.com/api/v1/admin/records"
 APPROVED_PRODUCTION_HOSTS = frozenset({"ade0033.pythonanywhere.com"})
+DEFAULT_TIMEOUT_SECONDS = 20 * 60
 
 
 def validate_endpoint(endpoint):
@@ -33,7 +34,7 @@ def validate_endpoint(endpoint):
 class UploadClient:
     def __init__(self, endpoint, *, mode="production", approved_endpoint=PRODUCTION_UPLOAD_ENDPOINT,
                  approved_hosts=APPROVED_PRODUCTION_HOSTS, transport=None, sleeper=time.sleep,
-                 retries=2, timeout=60, auth_headers=None, method="POST", encode=None):
+                 retries=2, timeout=DEFAULT_TIMEOUT_SECONDS, auth_headers=None, method="POST", encode=None):
         self.endpoint = validate_endpoint(endpoint)
         if mode == "production":
             approved = validate_endpoint(approved_endpoint) if approved_endpoint else None
