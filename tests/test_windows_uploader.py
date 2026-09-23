@@ -27,12 +27,20 @@ class Credentials:
     def get(self): return "SENSITIVE_TEST_VALUE"
 
 
+def live_records(*, end, days):
+    records = generate(end=end, days=days)
+    for record in records:
+        record["source_file"] = "server.xlsx"
+    return records
+
+
 class Transport:
     def __init__(self, sequence, baseline=None):
         self.sequence = iter(sequence)
         self.calls = []
         self.download_calls = []
-        self.baseline = baseline if baseline is not None else generate(end=date(2026, 9, 9), days=1)
+        self.baseline = baseline if baseline is not None else live_records(
+            end=date(2026, 9, 9), days=1)
 
     def __call__(self, request, timeout):
         if request.get_method() == "GET":
@@ -297,7 +305,7 @@ def test_process_convert_null_backup_and_repeat(tmp_path, monkeypatch):
 
 def test_first_run_merges_excel_into_server_baseline_before_upload(tmp_path):
     store = LocalStore(tmp_path / "user")
-    baseline = generate(end=date(2026, 9, 9), days=3)
+    baseline = live_records(end=date(2026, 9, 9), days=3)
     source = excel(tmp_path / "latest.xlsx", value=17, day="2026-09-10")
     upload, transport = client([Response()], baseline=baseline)
     result = process(source, store, Credentials(), upload)
@@ -311,13 +319,27 @@ def test_first_run_merges_excel_into_server_baseline_before_upload(tmp_path):
 
 def test_completed_server_date_is_not_replaced_by_partial_excel(tmp_path):
     store = LocalStore(tmp_path / "user")
-    baseline = generate(end=date(2026, 9, 10), days=1)
+    baseline = live_records(end=date(2026, 9, 10), days=1)
     source = excel(tmp_path / "overlap.xlsx", value=17, day="2026-09-10")
     upload, transport = client([Response()], baseline=baseline)
     with pytest.raises(ValueError):
         process(source, store, Credentials(), upload)
     assert not transport.calls
     assert not store.records.exists()
+
+
+def test_first_real_excel_replaces_synthetic_server_sample(tmp_path):
+    store = LocalStore(tmp_path / "user")
+    baseline = generate(end=date(2026, 9, 10), days=3)
+    source = excel(tmp_path / "real.xlsx", value=17, day="2026-09-10")
+    upload, transport = client([Response()], baseline=baseline)
+    progress = []
+    result = process(source, store, Credentials(), upload, progress.append)
+    uploaded = json.loads(transport.calls[0][0].data)
+    assert {record["date"] for record in uploaded} == {"2026-09-10"}
+    assert {record["source_file"] for record in uploaded} == {"real.xlsx"}
+    assert result["report"]["replaced_synthetic_baseline"] is True
+    assert "서버 샘플 데이터 확인 · 실데이터로 교체 중" in progress
 
 
 def test_failed_conversion_backup_and_upload_preserve_live_and_state(tmp_path, monkeypatch):
