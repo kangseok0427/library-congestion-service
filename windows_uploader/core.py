@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from backend.adapters import read_records
-from backend.domain import validate_records
+from backend.domain import DataError, validate_records
 from library_etl import refresh
 from .upload import UploadError
 
@@ -19,10 +19,15 @@ def process(source, store, credentials, client, progress=lambda message: None):
         baseline = validate_records(client.fetch(token))
         if not baseline:
             raise ValueError("서버 기존 기록이 비어 있습니다.")
-        staged.write_text(json.dumps(baseline, ensure_ascii=False, allow_nan=False),
-                          encoding="utf-8")
-        progress("Excel 변환 및 서버 기록 병합 중")
+        replacing_sample = all(record["source_file"] == "synthetic" for record in baseline)
+        if replacing_sample:
+            progress("서버 샘플 데이터 확인 · 실데이터로 교체 중")
+        else:
+            staged.write_text(json.dumps(baseline, ensure_ascii=False, allow_nan=False),
+                              encoding="utf-8")
+            progress("Excel 변환 및 서버 기록 병합 중")
         report = refresh(source, staged)
+        report["replaced_synthetic_baseline"] = replacing_sample
         progress("변환 결과 검증 중")
         records = validate_records(read_records(staged))
         if not records:
@@ -41,6 +46,8 @@ def process(source, store, credentials, client, progress=lambda message: None):
         store.log(f"작업 실패: {type(exc).__name__}")
         if isinstance(exc, UploadError):
             raise
+        if isinstance(exc, DataError):
+            raise ValueError(str(exc)) from None
         if isinstance(exc, (ValueError, OSError)):
             raise ValueError("변환, 검증 또는 백업에 실패했습니다. Excel과 로그를 확인하세요.") from None
         raise RuntimeError("작업에 실패했습니다. 로그를 확인하세요.") from None
