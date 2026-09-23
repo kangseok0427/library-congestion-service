@@ -82,3 +82,6 @@ python -m scripts.e2e --records data/processed/records.json --date 2026-09-10
 [구현·인터페이스·인수인계](docs/architecture.md) / [Git 협업](docs/git-workflow.md)
 
 도서관 PC용 Excel 변환·전송 프로그램: [ADE-37 Windows 안내](docs/windows-uploader.md).
+
+운영자 업로드 API는 `POST /api/v1/admin/records`이며 `ADMIN_UPLOAD_TOKEN` 환경변수의
+Bearer 토큰을 요구합니다. 검증된 전체 records 배열만 운영 파일에 원자적으로 반영합니다.

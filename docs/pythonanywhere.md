@@ -112,8 +112,19 @@ python -m library_etl refresh path/to/input.xlsx --partial-date YYYY-MM-DD
 ```
 
 갱신 실패 시 기존 정상 JSON은 유지됩니다. 문제가 생기면 error log를 확인하고 최근 정상
-백업을 같은 경로에 복구한 뒤 웹을 새로고침합니다. T12 인증 업로드 API와 T13 PC 전송
-프로그램이 완성되면 이 수동 절차를 대체합니다.
+백업을 같은 경로에 복구한 뒤 웹을 새로고침합니다.
+
+ADE-35 배포 후에는 웹앱 실행 환경에 `ADMIN_UPLOAD_TOKEN`을 추가하고 다음 endpoint를
+사용합니다. 토큰은 충분히 긴 무작위 값으로 생성하고 Git, 문서, 채팅에 올리지 않습니다.
+
+```text
+POST https://ade0033.pythonanywhere.com/api/v1/admin/records
+Authorization: Bearer <ADMIN_UPLOAD_TOKEN>
+```
+
+정상 업로드는 운영 파일을 즉시 원자 교체하므로 별도 웹앱 reload 없이 다음 요청부터
+반영됩니다. 서버 백업은 `~/library-congestion-data/backups`, 업로드 로그는
+`~/library-congestion-data/logs/admin-upload.log`에 저장됩니다.
 
 ## 7. 중지·삭제
 

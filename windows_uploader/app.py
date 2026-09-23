@@ -7,7 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .core import process
 from .storage import Credentials, LocalStore
-from .upload import UploadClient, validate_endpoint
+from .upload import PRODUCTION_UPLOAD_ENDPOINT, UploadClient, validate_endpoint
 
 
 class UploaderApp:
@@ -23,9 +23,10 @@ class UploaderApp:
         frame.pack(fill="both", expand=True)
         frame.columnconfigure(1, weight=1)
         self.source = tk.StringVar()
-        self.endpoint = tk.StringVar(value=self.store.read_config().get("endpoint", ""))
+        self.endpoint = tk.StringVar(value=self.store.read_config().get(
+            "endpoint", PRODUCTION_UPLOAD_ENDPOINT))
         self.token = tk.StringVar()
-        self.status = tk.StringVar(value="대기 중 · T12 API 계약 확정 후 실제 endpoint 연결 필요")
+        self.status = tk.StringVar(value="대기 중 · Excel 파일과 인증 토큰을 확인하세요")
         self.last = tk.StringVar(value=self.store.last_success() or "없음")
         self.token_state = tk.StringVar(value="저장됨" if self.credentials.exists() else "없음")
         ttk.Label(frame, text="Excel 파일").grid(row=0, column=0, sticky="w", pady=7)
