@@ -5,6 +5,10 @@ subtracts front+back OUT. From the first untrustworthy hour (missing gate, parti
 collection, missing OUT, negative balance, missing hour) the rest of that day has
 no value. Forecasts average recent valid values of the same weekday and hour and
 fall back to the same hour only when fewer than two same-weekday samples exist.
+
+OUT_11 (decision 2026-09-30, option 나): the ETL always emits it as null because of
+a duplication defect, so 11시 and later are not estimated. It is never filled with
+0 or IN_11. Recovering it from the daily total_out (option 가) is a proposal only.
 """
 from collections import defaultdict
 from datetime import timedelta

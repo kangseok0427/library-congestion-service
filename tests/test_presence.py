@@ -119,3 +119,22 @@ def test_api_contract_keeps_legacy_fields():
     assert past['hourly'][0]['in_count'] == 60 and past['hourly'][0]['estimated_present'] == 60
     assert past['hourly'][-1]['quality_status'] == 'valid'
     assert client.get('/api/v1/congestion/today', params={'date': '2026-09-28'}).json()['hourly'] == []  # Monday
+
+
+def test_etl_out_11_null_means_no_estimate_after_ten():
+    # Decision (9/30): option (나). ETL always emits OUT_11 as null (docs/json-refresh.md),
+    # so 11시 and later are not estimated; OUT_11 is never filled with 0 or IN_11.
+    records = []
+    for weeks in (1, 2, 3):
+        records += day_records(TUE - timedelta(weeks=weeks), [(5, 1)] * 12, [(5, 1)] * 12)
+    for r in records:
+        if r['hour'] == 11:
+            r['out_count'] = None
+    service = LibraryService(records)
+    past = service.stats('2026-09-15', now=datetime(2026, 9, 22, 8, tzinfo=KST))['hourly']
+    assert [(h['estimated_present'], h['quality_status']) for h in past[:4]] == [
+        (8, 'valid'), (16, 'valid'), (None, 'missing_out'), (None, 'insufficient_data')]
+    today = service.today(now=datetime(2026, 9, 22, 8, tzinfo=KST))
+    assert [h['estimated_present'] for h in today['hourly']] == [8, 16] + [None] * 10
+    assert all(h['level'] is None for h in today['hourly'][2:])
+    assert (today['recommendation']['best_start_hour'], today['recommendation']['best_end_hour']) == (9, 11)

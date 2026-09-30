@@ -48,6 +48,8 @@ in_count, out_count, total_in, total_out, is_partial, source_file.
 - 운영일마다 운영 시작 시 0명에서 시작해 시간대별 `이전 값 + 정문·후문 IN 합 − OUT 합`을 누적합니다. 날짜가 바뀌면 초기화하고 원본 IN/OUT은 그대로 둡니다.
 - 출입구 누락(`missing_gate`), 부분 수집(`partial`), OUT 결측(`missing_out`), 누적 음수(`negative_balance`), 시간대 누락이 나오면
   그 시점부터 그날 나머지는 값 없이 `insufficient_data`입니다. OUT 결측을 0으로 바꾸지 않습니다.
+- **OUT_11 (2026-09-30 결정, (나))**: 전처리가 OUT_11을 항상 null로 내므로 매일 11시 이후는 추정하지 않습니다.
+  0이나 IN_11로 채우지 않습니다. 일일 `total_out`에서 역산하는 (가)는 `total_out`의 독립성 확인 후 검토할 제안입니다.
 - 예측: 대상 날짜 이전 N주 유효 값 중 같은 요일·시간 평균(`same_weekday_same_hour`). 같은 요일 표본이 2개 미만이면
   같은 시간 평균(`same_hour_fallback`), 없으면 null과 `insufficient_samples`. 결과는 정수로 반올림합니다.
 - `level`/`score`는 예측값을 같은 기간·같은 시간의 유효 추정 체류 인원 분포에 midrank로 비교합니다(경계는 그대로 35/70).
