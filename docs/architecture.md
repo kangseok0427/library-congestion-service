@@ -39,11 +39,26 @@ in_count, out_count, total_in, total_out, is_partial, source_file.
 - patterns는 모든 16시간·두 게이트가 완전한 날의 시간대 IN 합계를 사용합니다.
 - Excel의 부분 수집 날짜는 `--partial-date`로 명시합니다. 파일명을 추측해서 정하지 않습니다.
   T02 결과를 입력할 때는 is_partial을 그대로 존중합니다.
-- 현재 체류인원, 좌석 점유율, IN-OUT 누적 추정은 제공하지 않습니다.
+- ADE-40부터 운영일별 누적 IN − OUT으로 **추정 체류 인원**을 계산합니다(아래 절). 실시간 인원이나 좌석 점유율은 제공하지 않습니다.
 - available_hours는 수집 시간대이며 운영시간이나 휴관일 달력이 아닙니다.
   운영정보 담당자가 달력을 연결하기 전에는 도서관 공지를 확인해야 합니다.
 
-## 예측 기준
+## 추정 체류 인원 (ADE-40, `backend/presence.py`)
+
+- 운영일마다 운영 시작 시 0명에서 시작해 시간대별 `이전 값 + 정문·후문 IN 합 − OUT 합`을 누적합니다. 날짜가 바뀌면 초기화하고 원본 IN/OUT은 그대로 둡니다.
+- 출입구 누락(`missing_gate`), 부분 수집(`partial`), OUT 결측(`missing_out`), 누적 음수(`negative_balance`), 시간대 누락이 나오면
+  그 시점부터 그날 나머지는 값 없이 `insufficient_data`입니다. OUT 결측을 0으로 바꾸지 않습니다.
+- 예측: 대상 날짜 이전 N주 유효 값 중 같은 요일·시간 평균(`same_weekday_same_hour`). 같은 요일 표본이 2개 미만이면
+  같은 시간 평균(`same_hour_fallback`), 없으면 null과 `insufficient_samples`. 결과는 정수로 반올림합니다.
+- `level`/`score`는 예측값을 같은 기간·같은 시간의 유효 추정 체류 인원 분포에 midrank로 비교합니다(경계는 그대로 35/70).
+- 추천은 추정 체류 인원 연속 2시간 합이 가장 낮은 구간입니다. 오늘은 이미 시작된 시간을 제외합니다.
+- today의 `baseline_avg`·`difference_rate`·`sample_count`도 추정 체류 인원 기준입니다. `expected_visitors`, `method`, stats의 baseline·증감률,
+  patterns, backtest는 하위 호환을 위해 기존 입장량 기준을 유지합니다.
+- 원본 ADE-40 구현(operator-api `50d0eaa`)과 같은 합성 입력에서 시간대별 값·상태가 같음을 확인했습니다.
+  차이: 원본은 전체 기간 분포로 단계를 매기고 오늘 관측 누적을 예측에 섞지만, 여기서는 기존 설계대로 대상 날짜 이전 N주만 쓰고
+  오늘 실제 값은 stats에만 붙입니다.
+
+## 입장량 예측 기준 (`expected_visitors`)
 
 1. 기본 N=4주(1~52 설정 가능), 대상 날짜 이전 데이터만 사용합니다.
 2. 같은 요일·시간의 완전한 집계 평균을 expected_visitors로 사용합니다.
@@ -51,24 +66,24 @@ in_count, out_count, total_in, total_out, is_partial, source_file.
 4. 동일 요일 자료가 없으면 같은 기간·같은 시간 평균으로 fallback합니다.
 5. 해당 시간의 자료가 전혀 없으면 null / unavailable로 반환합니다. 오래된 자료나 다른 시간 값을 복사하지 않습니다.
 6. 부분 데이터는 학습과 backtest 정답에서 제외합니다. 0은 정상 관측으로 취급합니다.
-7. 해당 시간대 과거 분포에서 midrank 백분위 점수를 계산합니다.
-   35 이하 quiet, 70 이하 normal, 나머지 busy입니다. 전부 동일한 값이면 50(normal)입니다.
-8. 추천은 예측 가능한 연속 2시간 중 예상 입장량 합계가 가장 낮은 구간입니다. 동률은 이른 시간 우선입니다.
-   오늘은 이미 시작된 시간대를 제외하며 추천 가능한 구간이 없으면 null입니다.
+7. midrank 백분위: 35 이하 quiet, 70 이하 normal, 나머지 busy. 전부 동일한 값이면 50(normal)입니다.
+   API의 `level`은 ADE-40부터 추정 체류 인원 기준입니다(위 절).
+8. 추천 구간 계산(`recommendation`)은 동률이면 이른 시간 우선이고, 추천 가능한 구간이 없으면 null입니다.
 
 예측값 자체가 동일 요일 baseline이므로 forecast difference_rate는 0%입니다.
 baseline이 0이거나 fallback이면 증감률은 null입니다.
 stats의 실제 관측값은 baseline 대비 증감률을 계산하지만 partial 관측은 비교하지 않습니다.
-혼잡도는 예상 입장량 분포 비교이며 수용 인원 대비 혼잡이나 실시간 센서 값이 아닙니다.
+혼잡도는 과거 추정 체류 인원 분포와의 상대 비교이며 수용 인원 대비 혼잡이나 실시간 센서 값이 아닙니다.
 
 ## API
 
 - GET /api/v1/congestion/today: v1 forecast 응답. optional `?date=YYYY-MM-DD`는 검증/날짜 조회용 확장입니다.
-- GET /api/v1/stats?date=YYYY-MM-DD: 원본 일일 합계와 시간대 집계. partial/complete 구분.
+- GET /api/v1/stats?date=YYYY-MM-DD: 원본 일일 합계와 시간대 집계. partial/complete 구분. hourly에 그날의 `estimated_present`, `quality_status` 추가.
 - GET /api/v1/meta: 이름, 수집 시간대, quiet/normal/busy 한국어 레이블.
 - GET /api/v1/patterns: 완전한 날짜의 일·요일·월 통계 확장.
 - 오류는 `{error: {code, message}}`. 날짜 오류 400, 자료 없음 404, 입력 처리 오류 422.
 - 추가 메타데이터: method, sample_count, is_sample, basis. 공통 필드 이름을 변경하지 않습니다.
+- ADE-40 today hourly 추가 필드: `estimated_present`(int|null), `calculation_basis`, `quality_status`. 값이 null이면 `level`·`score`도 null입니다.
 - 조회용 API에 업로드 기능은 없습니다. 파일 갱신은 신뢰된 로컬 CLI/T08에서 수행합니다.
 
 ## backtest

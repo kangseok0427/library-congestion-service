@@ -13,7 +13,8 @@ const METRIC = {
   visitors: { key: 'expected_visitors', name: '예상 방문량', basis: '과거 이용 패턴으로 계산한 예상 방문량 기준입니다. 현재 체류인원이 아닙니다.' },
 };
 let shown = METRIC.visitors;   // 제목·안내가 오류 화면에서도 서로 어긋나지 않게
-const metricOf = hourly => hourly.some(h => 'estimated_present' in h) ? METRIC.present : METRIC.visitors;
+// 휴관일처럼 시간대가 없으면 직전 지표 문구를 그대로 둡니다.
+const metricOf = hourly => !hourly.length ? shown : hourly.some(h => 'estimated_present' in h) ? METRIC.present : METRIC.visitors;
 let generation = 0;
 
 const kstDate = (value = new Date()) => {

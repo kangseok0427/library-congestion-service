@@ -1,8 +1,8 @@
-"""ADE-41 browser check: ADE-40 estimated_present responses -> bars, colors, table, detail.
+"""ADE-41 browser check: estimated_present responses -> bars, colors, table, detail.
 
-/congestion/today is replaced with fixtures captured from ADE-40's real code
-(scripts/capture_ade40_fixture.py, synthetic records). Everything else comes from
-the team test server. The fixtures are test-only; this is not a real-data check.
+Steps 1-5 replace /congestion/today with fixtures captured from the original ADE-40
+code (scripts/capture_ade40_fixture.py); step 6 uses the team backend as is.
+All inputs are synthetic; this is not a real-data check.
 """
 import json
 import os
@@ -10,7 +10,7 @@ import socket
 import subprocess
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -143,16 +143,36 @@ def main():
             page.screenshot(path='test-results/ade41-desktop.png', full_page=True)
             checks.append('390px no page overflow')
 
-            # 6) current team backend (no estimated_present) keeps 예상 방문량 wording
+            # 6) the real team backend (ADE-40 ported) on all 8 KST dates, no replaced responses
             page.unroute('**/api/v1/congestion/today*')
-            page.get_by_role('button', name='새로고침').click()
+            first = date.fromisoformat(DAY)
+            for offset in range(8):
+                day = (first + timedelta(days=offset)).isoformat()
+                data = page.request.get(f'{url}/api/v1/congestion/today?date={day}').json()
+                page.locator('#date').fill(day); page.get_by_role('button', name='조회', exact=True).click()
+                expect(page.locator('#now-when')).to_contain_text(f'{int(day[5:7])}월 {int(day[8:])}일')
+                if data['hourly']:
+                    check_hours(page, data)
+                    assert any(h['level'] for h in data['hourly'])
+                else:
+                    expect(page.locator('#hourly tr')).to_have_count(0)
+                    expect(page.locator('#hours-title')).to_have_text('시간대별 추정 체류 인원')
+            checks.append('team backend estimated_present shown on 8 KST dates incl. closed days')
+
+            # 7) a response without estimated_present keeps 예상 방문량 wording (no relabelling)
+            def legacy(route):
+                body = route.fetch().json()
+                for h in body['hourly']:
+                    h.pop('estimated_present'); h.pop('calculation_basis'); h.pop('quality_status')
+                route.fulfill(status=200, content_type='application/json', body=json.dumps(body, ensure_ascii=False))
+            page.route('**/api/v1/congestion/today*', legacy)
+            page.locator('#date').fill(DAY); page.get_by_role('button', name='조회', exact=True).click()
             expect(page.locator('#hours-title')).to_have_text('시간대별 예상 방문량')
             expect(page.locator('#metric-col')).to_have_text('예상 방문량')
-            expect(page.locator('#hourly tr').first).not_to_contain_text('추정 불가')
             assert '추정 체류 인원' not in page.locator('.hours').inner_text()
-            checks.append('legacy API is not relabelled as 추정 체류 인원')
+            checks.append('legacy response is not relabelled as 추정 체류 인원')
             browser.close()
-        print(json.dumps({'e2e_present': 'PASS', 'input': 'ADE-40 fixtures (synthetic records)', 'checks': checks}, ensure_ascii=False))
+        print(json.dumps({'e2e_present': 'PASS', 'input': 'ADE-40 fixtures + team backend (synthetic records)', 'checks': checks}, ensure_ascii=False))
     finally:
         process.terminate(); process.wait(timeout=10)
 
