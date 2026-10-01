@@ -67,8 +67,8 @@ def test_refresh_success_idempotence_history_and_api(active, tmp_path):
     report = refresh(source, path, partial_dates=[], rebuild_fn=rebuild_spy)
     after = snapshot(path, client)
     assert after[0] != before[0] and after[2]['total_in'] == 1998
-    assert after[2]['hourly'][2]['out_count'] is None
-    assert after[2]['hourly_total_out'] is None
+    assert after[2]['hourly'][2]['out_count'] == 7
+    assert after[2]['hourly_total_out'] == 84
     assert after[2]['total_out'] == 1776
     assert rebuild_spy.call_count == 1
     assert Path(rebuild_spy.call_args.args[1]) != path
@@ -77,7 +77,7 @@ def test_refresh_success_idempotence_history_and_api(active, tmp_path):
     assert len(rows) == len(json.loads(before[0]))
     assert any(r.get('quality_note') == 'retained' for r in rows)
     assert report['warning_counts']['HOURLY_TOTAL_MISMATCH'] == 4
-    assert all(r['out_count'] is None for r in rows if r['date'] == '2026-09-10' and r['hour'] == 11)
+    assert sorted(r['out_count'] for r in rows if r['date'] == '2026-09-10' and r['hour'] == 11) == [3, 4]
     assert any('HOURLY_TOTAL_MISMATCH' in r.get('quality_note', '') for r in rows)
     refresh(source, path, partial_dates=[])
     repeated = json.loads(path.read_text(encoding='utf-8'))

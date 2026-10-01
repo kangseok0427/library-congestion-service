@@ -1,0 +1,163 @@
+{
+  "date": "2026-09-22",
+  "data_status": "partial",
+  "reference_time": "2026-09-22T13:00:00+09:00",
+  "congestion": {
+    "level": null,
+    "label": "자료 부족/추정 불가",
+    "score": null
+  },
+  "recommendation": {
+    "best_start_hour": 9,
+    "best_end_hour": 11,
+    "message": "9시~11시 방문을 추천합니다."
+  },
+  "hourly": [
+    {
+      "hour": 9,
+      "expected_visitors": 0,
+      "estimated_present": 0,
+      "baseline_avg": 2.0,
+      "difference_rate": -100.0,
+      "level": "quiet",
+      "score": 0.0,
+      "calculation_basis": "observed_cumulative",
+      "sample_count": 4,
+      "quality_status": "valid"
+    },
+    {
+      "hour": 10,
+      "expected_visitors": 30,
+      "estimated_present": 30,
+      "baseline_avg": 4.0,
+      "difference_rate": 650.0,
+      "level": "busy",
+      "score": 100.0,
+      "calculation_basis": "observed_cumulative",
+      "sample_count": 4,
+      "quality_status": "valid"
+    },
+    {
+      "hour": 11,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 6.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "missing_out"
+    },
+    {
+      "hour": 12,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 8.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "insufficient_data"
+    },
+    {
+      "hour": 13,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 10.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "insufficient_data"
+    },
+    {
+      "hour": 14,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 12.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "insufficient_data"
+    },
+    {
+      "hour": 15,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 14.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "insufficient_data"
+    },
+    {
+      "hour": 16,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 16.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "insufficient_data"
+    },
+    {
+      "hour": 17,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 18.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "insufficient_data"
+    },
+    {
+      "hour": 18,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 20.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "insufficient_data"
+    },
+    {
+      "hour": 19,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 22.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "insufficient_data"
+    },
+    {
+      "hour": 20,
+      "expected_visitors": null,
+      "estimated_present": null,
+      "baseline_avg": 24.0,
+      "difference_rate": null,
+      "level": null,
+      "score": null,
+      "calculation_basis": "same_weekday_same_hour",
+      "sample_count": 4,
+      "quality_status": "insufficient_data"
+    }
+  ],
+  "updated_at": "2026-09-22T13:00:00+09:00",
+  "_fixture": "operator-api 50d0eaa today_forecast(), synthetic records, now=2026-09-22T13:00:00 KST. Test-only; not real library data."
+}

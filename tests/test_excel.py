@@ -23,6 +23,7 @@ def test_excel_to_standard_records(tmp_path):
     records,report=from_excel(path,['2026-09-10'])
     assert len(records)==32 and all(r['is_partial'] for r in records)
     assert len(report['warnings'])==2 and records[0]['total_in']==999
+    assert all(r['out_count'] == 10 for r in records if r['hour'] == 11)
 
 
 @pytest.mark.parametrize('bad',[-1,1.5,'=1+1','not-a-number'])

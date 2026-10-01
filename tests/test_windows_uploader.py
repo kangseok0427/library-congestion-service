@@ -294,8 +294,8 @@ def test_process_convert_null_backup_and_repeat(tmp_path, monkeypatch):
     first = process(source, store, Credentials(), upload)
     rows = json.loads(store.records.read_text(encoding="utf-8"))
     assert validate_records(rows) == rows
-    assert all(r["out_count"] is None for r in rows
-               if r["date"] == "2026-09-10" and r["hour"] == 11)
+    assert sorted(r["out_count"] for r in rows
+                  if r["date"] == "2026-09-10" and r["hour"] == 11) == [3, 4]
     assert first["backup"].read_bytes() == store.records.read_bytes()
     assert store.last_success() == first["last_success"]
     second = process(source, store, Credentials(), upload)

@@ -5,6 +5,7 @@ from statistics import mean
 from .domain import LEVELS, DataError, aggregate, parse_date, validate_records, nullable_sum
 from .prediction import forecast, recommendation, historical, percentile
 from .library_hours import DEFAULT_HOURS, KST, now_kst
+from . import presence
 
 
 class LibraryService:
@@ -14,6 +15,7 @@ class LibraryService:
         self.policy = policy
         self.service_rows = policy.filter_rows(self.rows)
         self.closed_dates = {r['date'] for r in self.rows if r.get('is_closed_day') is True}
+        self.present = presence.observed(self.records, policy)
         self.updated_at = updated_at or datetime.now(KST).isoformat()
         self.weeks = weeks
         self.sample = sample
@@ -45,6 +47,8 @@ class LibraryService:
                 pool = [r['visit_count'] for r in history if r['hour'] == row['hour']]
                 if pool:
                     row['congestion_score'], row['congestion_level'] = percentile(row['visit_count'], pool)
+            # ADE-40: raw IN/OUT stay as they are; the day's cumulative estimate is added.
+            row['estimated_present'], row['quality_status'] = self.present.get((day, row['hour']), (None, 'insufficient_data'))
         return dict(date=day, data_status='partial' if partial else 'complete',
                     total_in=sum(r['total_in'] for r in gates.values()),
                     total_out=sum(r['total_out'] for r in gates.values()),
@@ -57,11 +61,14 @@ class LibraryService:
         now = now.astimezone(KST)
         target = target or now.date()
         closed = self.is_closed(target)
-        hourly = forecast(self.rows, target, self.weeks, self.policy)
+        # expected_visitors/method keep the legacy IN-based forecast for compatibility; level, score,
+        # sample_count, baseline_avg, difference_rate and the recommendation follow estimated_present (ADE-40).
+        present = presence.forecast(self.present, target, self.weeks, self.policy)
+        hourly = [dict(h, **present[h['hour']]) for h in forecast(self.rows, target, self.weeks, self.policy)]
         active = next((h for h in hourly if h['start_hour'] == now.hour), None) if target == now.date() else None
         level = active['level'] if active else None
         minimum_hour = now.hour + (1 if now.minute or now.second or now.microsecond else 0) if target == now.date() else self.policy.bounds(target)[0]
-        reco = recommendation(hourly, minimum_hour)
+        reco = recommendation(hourly, minimum_hour, key='estimated_present')
         if closed:
             reco['message'] = '휴관일에는 방문 시간을 추천하지 않습니다.'
         operating = self.policy.info(target)
@@ -72,7 +79,7 @@ class LibraryService:
                                     score=active['score'] if active else None),
                     recommendation=reco, hourly=hourly,
                     updated_at=self.updated_at, is_sample=self.sample,
-                    basis='과거 입장량 기준 예상 방문량 · 현재 체류인원 아님')
+                    basis='과거 유효 자료의 같은 요일·시간대 추정 체류 인원(누적 IN − OUT) 기준')
 
     def patterns(self):
         daily = defaultdict(list)

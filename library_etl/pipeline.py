@@ -111,7 +111,7 @@ def preprocess(path, *, sheet=None, partial_dates=None, source_name=None):
                 if hourly_sum != counts[f"전체_{kind}"]:
                     warnings.append({"row": number, "code": "HOURLY_TOTAL_MISMATCH", "kind": kind,
                                      "source_total": counts[f"전체_{kind}"], "hourly_sum": hourly_sum,
-                                     "basis": "raw_source_including_untrusted_OUT_11" if kind == "OUT" else "hourly_in"})
+                                     "basis": "hourly_out" if kind == "OUT" else "hourly_in"})
             parsed.append((number, day, gate_name, passage.strip(), counts))
     finally:
         workbook.close()
@@ -143,7 +143,7 @@ def preprocess(path, *, sheet=None, partial_dates=None, source_name=None):
         for hour in HOURS:
             records.append(dict(zip(FIELDS, (
                 day, WEEKDAYS[date.fromisoformat(day).weekday()], GATES[gate_name], gate_name,
-                passage, hour, counts[f"IN_{hour:02}"], None if hour == 11 else counts[f"OUT_{hour:02}"],
+                passage, hour, counts[f"IN_{hour:02}"], counts[f"OUT_{hour:02}"],
                 counts["전체_IN"], counts["전체_OUT"], day in partial, name))))
             if any(w.get("row") == number and w["code"] == "HOURLY_TOTAL_MISMATCH" for w in warnings):
                 records[-1]["quality_note"] = "HOURLY_TOTAL_MISMATCH"

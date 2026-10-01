@@ -38,15 +38,15 @@
   </section>
 
   <section class="hours">
-    <h2>시간대별 예상 방문량</h2>
+    <h2 id="hours-title">시간대별 예상 방문량</h2>
     <p class="hint">막대를 누르면 자세히 보입니다. 색은 그 시간대의 평소 분포와 비교한 결과입니다.</p>
     <div id="chart" class="chart" role="img" aria-label="시간대별 예상 방문량 그래프"></div>
-    <ul class="legend"><li class="quiet">여유</li><li class="normal">보통</li><li class="busy">혼잡</li></ul>
+    <ul class="legend"><li class="quiet">여유</li><li class="normal">보통</li><li class="busy">혼잡</li><li class="none">자료 부족</li></ul>
     <p class="detail" id="detail">시간대를 선택하세요.</p>
     <details>
       <summary>표로 보기</summary>
       <div class="table-wrap"><table>
-        <thead><tr><th>시간</th><th>예상 방문량</th><th>단계</th><th>평소 대비</th><th>근거</th></tr></thead>
+        <thead><tr><th>시간</th><th id="metric-col">예상 방문량</th><th>단계</th><th>평소 대비</th><th>근거</th></tr></thead>
         <tbody id="hourly"></tbody>
       </table></div>
     </details>
