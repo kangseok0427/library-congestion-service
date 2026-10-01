@@ -43,16 +43,17 @@ def forecast(rows, target, weeks=4, policy=DEFAULT_HOURS):
     return result
 
 
-def recommendation(hourly, minimum_hour=8):
-    by_hour = {r.get('start_hour', r['hour']): r for r in hourly if r['expected_visitors'] is not None}
-    candidates = [(by_hour[h]['expected_visitors'] + by_hour[h+1]['expected_visitors'], h)
+def recommendation(hourly, minimum_hour=8, key='expected_visitors'):
+    by_hour = {r.get('start_hour', r['hour']): r for r in hourly if r[key] is not None}
+    candidates = [(by_hour[h][key] + by_hour[h+1][key], h)
                   for h in by_hour if h >= minimum_hour and h + 1 in by_hour]
     if not candidates:
         return dict(best_start_hour=None, best_end_hour=None,
                     message='추천할 연속 2시간의 예측 데이터가 없습니다.')
     _, start = min(candidates)
+    basis = '과거 추정 체류 인원 기준으로' if key == 'estimated_present' else '과거 이용 패턴상'
     return dict(best_start_hour=start, best_end_hour=start+2,
-                message=f'{start}시~{start+2}시가 과거 이용 패턴상 한산합니다. 실제 운영시간·휴관 여부를 확인한 뒤 방문하세요.')
+                message=f'{start}시~{start+2}시가 {basis} 한산합니다. 실제 운영시간·휴관 여부를 확인한 뒤 방문하세요.')
 
 
 def backtest(rows, weeks=4, evaluation_days=28, policy=DEFAULT_HOURS):

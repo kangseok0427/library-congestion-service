@@ -68,7 +68,7 @@ def main():
                     refresh(source,path,partial_dates=[])
                     page.get_by_role('button',name='새로고침').click()
                     expect(page.locator('#actual')).to_contain_text(f'IN {count*14}명')
-                    assert page.request.get(url+'/api/v1/stats?date='+args.date).json()['hourly'][2]['out_count'] is None
+                    assert page.request.get(url+'/api/v1/stats?date='+args.date).json()['hourly'][2]['out_count'] == 14
                     saved=path.read_bytes();sheet.cell(2,6).value='=1+1';book.save(source);book.close()
                     try:refresh(source,path,partial_dates=[])
                     except DataError:pass
@@ -121,7 +121,7 @@ def main():
             print(json.dumps({'e2e':'PASS','input':'real_records' if args.records else 'synthetic',
                               'checks':['API to DOM','operating-hour forecast rows and bars','8 KST dates including closed and pending states','past and +8 rejected in UI and API','America/Los_Angeles browser timezone','record replacement updates actual and forecast',
                                         '390px no page overflow','invalid replacement error and stale number removal']+
-                                       (['synthetic XLSX refresh updates DOM','OUT_11 remains null',
+                                       (['synthetic XLSX refresh updates DOM','OUT_11 source value preserved',
                                          'invalid XLSX preserves JSON and DOM'] if not args.records else [])},ensure_ascii=False))
         finally:
             process.terminate();process.wait(timeout=10)

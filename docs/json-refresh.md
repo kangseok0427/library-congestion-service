@@ -62,14 +62,13 @@ FileProvider는 파일 내용을 해시하므로 동일 크기·동일 mtime 교
 - 기존 필수 12개 필드는 그대로다. 선택 필드가 없는 v1 JSON도 읽는다.
 - 선택 필드: is_closed_day(boolean/null), is_low_volume(boolean), quality_note(string/null).
   원본 records를 검증/병합/rebuild할 때 삭제하지 않는다. 새 Excel이 교체하는 그룹은 새 입력이 기준이다.
-- OUT_11은 복제 결함 때문에 전처리 출력에서 항상 null이다. 다른 시간의 잘못된 OUT은 오류다.
+- 검증을 통과한 모든 시간대 OUT은 원본 값 그대로 보존한다. `OUT_11`도 별도로 비우거나 보정하지 않는다.
 - 게이트 OUT 중 하나라도 null이면 그 시간대 OUT 집계는 null이다. 시간대 중 하나라도 null이면
   hourly_total_out도 null이다. 별도의 원본 total_out은 정수 그대로 날짜·게이트당 한 번만 합산한다.
 - 품질 필드는 시간대 API에도 전달한다. 휴관 여부는 하나라도 true면 true, 모두 false면 false,
   그 외에는 null이다. 저수집 여부는 하나라도 true면 true, note는 중복 없는 문자열들을 연결한다.
 - 시간대/원본 합계 차이는 HOURLY_TOTAL_MISMATCH로 진단과 records.quality_note에 보존한다.
-  원본 총량이나 시간대 수치를 보정하지 않는다. OUT 진단의 raw_source_including_untrusted_OUT_11은
-  복제 결함값을 포함한 원시 비교이며 실제 OUT 합계로 사용하지 않는다.
+  원본 총량이나 시간대 수치를 보정하지 않는다. 진단의 `hourly_in`·`hourly_out`은 원본 시간대 합계다.
 - 공식 휴관일 의미를 예측·추천 정책에 반영하는 LEAD 작업은 별도 검토 대상이다.
 
 ## 실행
@@ -110,7 +109,7 @@ pytest에 새 임시 경로 `--basetemp=work/pytest-check-1`을 지정한다.
 기존 테스트 26개와 새 테스트 26개를 포함하며 skip은 없다.
 Starlette/httpx 및 AnyIO 사용 중단 예고 경고 2건이 있으며 테스트 실패는 없다.
 Chromium E2E **PASS**: 기존 JSON 교체, 합성 XLSX 정상 갱신 후 DOM 변경,
-잘못된 XLSX 반영 거부 후 기존 DOM 유지, OUT_11 API null, 390px 화면을 확인했다.
+잘못된 XLSX 반영 거부 후 기존 DOM 유지, OUT_11 원본값 보존, 390px 화면을 확인했다.
 실제 원본 Excel은 두 작업 저장소에서 발견하지 못해 검증하지 않았다.
 공용 [PR #4](https://github.com/kangseok0427/library-congestion-service/pull/4)를 제출했다.
 구현 커밋은 `403d924`, 실행/검증 문서 커밋은 `92127c0`이다.
