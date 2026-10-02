@@ -12,6 +12,8 @@
   -webkit-text-size-adjust: 100%;
 }
 * { box-sizing: border-box; }
+/* .console(display:grid) 같은 레이아웃 규칙이 hidden 속성을 덮어쓰지 않게 합니다. */
+[hidden] { display: none !important; }
 body { margin: 0; }
 p { margin: 0; line-height: 1.6; }
 h1, h2 { margin: 0; letter-spacing: -0.01em; }

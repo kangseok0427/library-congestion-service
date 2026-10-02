@@ -39,6 +39,9 @@ def mock_flow(page, url):
     page.goto(url + '/frontend/admin.html?mock')
     expect(page.locator('#mock-banner')).to_be_visible()
     expect(page.get_by_role('heading', name='관리자 로그인')).to_be_visible()
+    # Before login only the login view is on screen.
+    expect(page.locator('#console-view')).to_be_hidden()
+    expect(page.get_by_role('button', name='로그아웃')).to_be_hidden()
     # The replacement admin page never asks for an upload token.
     assert page.locator('input[name*="token" i], input[id*="token" i]').count() == 0
 
@@ -53,6 +56,7 @@ def mock_flow(page, url):
     page.get_by_label('비밀번호').fill('pw')
     page.get_by_role('button', name='로그인').click()
     expect(page.get_by_role('heading', name='출입 기록 Excel 게시')).to_be_visible()
+    expect(page.locator('#login-view')).to_be_hidden()
     slots = page.locator('#version-list .slot:not(.empty)')
     expect(slots).to_have_count(4)
     initial_ids = [v['id'] for v in fixture('admin-versions-four.json')['versions']]
@@ -121,6 +125,7 @@ def mock_flow(page, url):
     page.get_by_role('button', name='검증 후 게시').click()
     expect(page.get_by_role('heading', name='관리자 로그인')).to_be_visible()
     expect(page.locator('#login-error')).to_have_text('로그인이 만료되었습니다. 다시 로그인하세요.')
+    expect(page.locator('#console-view')).to_be_hidden()
 
     # Logout.
     page.get_by_label('비밀번호').fill('pw')
@@ -169,6 +174,7 @@ def http_flow(page, url):
     page.goto(url + '/frontend/admin.html')
     expect(page.locator('#mock-banner')).to_be_hidden()
     expect(page.get_by_role('heading', name='관리자 로그인')).to_be_visible()
+    expect(page.locator('#console-view')).to_be_hidden()
     page.get_by_label('아이디').fill('admin')
     page.get_by_label('비밀번호').fill('secret')
     page.get_by_role('button', name='로그인').click()
