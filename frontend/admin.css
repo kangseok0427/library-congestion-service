@@ -1,0 +1,115 @@
+/* ADE-47 관리자 웹 — 기관 PC 브라우저 우선, 390px까지 반응형.
+   색은 이용자 화면(style.css)과 같은 값을 쓰되 파일은 분리합니다(ADE-49와 동시 수정 충돌 방지). */
+:root {
+  --paper: #F5F4EF; --card: #FFFFFF; --ink: #1B211E; --muted: #5E6862; --line: #DCDFD8;
+  --accent: #1F4E3E; --accent-soft: #E3ECE7;
+  --ok: #2A7A57; --ok-bg: #DFF0E7;
+  --warn: #8A5D08; --warn-bg: #F7EBD0;
+  --error: #B9432A; --error-bg: #F7DFD8;
+  --focus: #8EC6AE;
+  font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+  color: var(--ink); background: var(--paper);
+  -webkit-text-size-adjust: 100%;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+p { margin: 0; line-height: 1.6; }
+h1, h2 { margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 22px; line-height: 1.3; }
+h2 { font-size: 17px; line-height: 1.35; }
+h1:focus, h2:focus { outline: none; }
+.hint { font-size: 14px; color: var(--muted); margin-top: 6px; }
+
+button, input { font: inherit; font-size: 15px; color: var(--ink); }
+button { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; font-weight: 600; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.quiet-button { background: transparent; color: var(--accent); border-color: var(--line); font-weight: 500; }
+.quiet-button:not(:disabled):hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible, .drop:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.mock-banner { background: var(--warn-bg); color: var(--warn); font-size: 14px; padding: 8px 20px; text-align: center; }
+
+/* 상단 바 */
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1080px; margin: 0 auto; padding: 18px 20px 6px; }
+.brand { font-size: 15px; font-weight: 600; }
+.brand span { color: var(--muted); font-weight: 400; margin-left: 4px; }
+
+main { max-width: 1080px; margin: 0 auto; padding: 12px 20px 48px; }
+.booting { color: var(--muted); padding: 40px 0; }
+
+/* 안내 문구 */
+.status:empty { display: none; }
+.status { margin-top: 16px; }
+.notice { padding: 12px 14px; border-radius: 10px; font-size: 15px; }
+.notice.ok { background: var(--ok-bg); color: var(--ok); }
+.notice.warn { background: var(--warn-bg); color: var(--warn); }
+.notice.error { background: var(--error-bg); color: var(--error); }
+.notice.info, .notice.progress { background: var(--accent-soft); color: var(--accent); }
+.notice-list { margin: 8px 0 0; padding: 10px 14px 10px 32px; border-radius: 10px; font-size: 14px; line-height: 1.6; max-height: 220px; overflow-y: auto; }
+.notice-list.error { background: #FBEFEB; color: var(--error); }
+.notice-list.warn { background: #FBF4E4; color: var(--warn); }
+
+/* 로그인 */
+.login { max-width: 380px; margin: 48px auto 0; padding: 28px 24px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+.login .notice { margin-top: 16px; }
+.login form { display: grid; gap: 6px; margin-top: 20px; }
+.login label { font-size: 14px; color: var(--muted); margin-top: 8px; }
+.login input { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.login button { margin-top: 18px; padding: 12px; }
+
+/* 관리 화면: PC 2열, 좁은 화면 1열 */
+.console { display: grid; gap: 20px; margin-top: 8px; }
+@media (min-width: 880px) { .console { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: start; } }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px 22px; min-width: 0; }
+.panel[aria-busy="true"] { cursor: progress; }
+
+/* 업로드 */
+#upload-form { display: grid; gap: 14px; margin-top: 18px; }
+.drop { position: relative; display: grid; gap: 4px; place-items: center; text-align: center; min-height: 168px; padding: 24px 16px;
+  border: 2px dashed var(--line); border-radius: 14px; background: var(--paper); cursor: pointer; overflow-wrap: anywhere; }
+.drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.drop input:disabled { cursor: not-allowed; }
+.drop-main { font-size: 17px; font-weight: 600; color: var(--accent); }
+.drop-sub { font-size: 14px; color: var(--muted); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop.picked { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.drop.rejected { border-style: solid; border-color: var(--error); background: #FBEFEB; }
+.drop.rejected .drop-main { color: var(--error); }
+#publish { justify-self: start; padding: 12px 22px; }
+
+/* 버전 선반: 최신 4칸 고정. 빈 칸도 그려서 순환 규칙이 보이게 합니다. */
+.versions-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.versions-head .quiet-button { padding: 7px 12px; font-size: 14px; }
+.shelf { list-style: none; margin: 18px 0 0; padding: 0 0 0 18px; position: relative; display: grid; gap: 10px; }
+.shelf::before { content: ''; position: absolute; left: 5px; top: 14px; bottom: 14px; width: 2px; background: var(--line); }
+.slot { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.slot::before { content: ''; position: absolute; left: -18px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--line); }
+.slot.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 4px 0 0 var(--accent); }
+.slot.active::before { background: var(--accent); border-color: var(--accent); }
+.slot.empty { border-style: dashed; background: transparent; color: var(--muted); font-size: 14px; min-height: 52px; }
+.slot-body { min-width: 0; flex: 1 1 220px; }
+.slot-when { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.slot-what { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.slot-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--paper); color: var(--muted); border: 1px solid var(--line); }
+.tag.leaving { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
+.slot-side { flex: 0 0 auto; }
+.slot-side .quiet-button { padding: 8px 12px; font-size: 14px; background: var(--card); }
+.in-use { display: inline-block; font-size: 14px; font-weight: 700; color: var(--accent); padding: 6px 2px; }
+
+/* 되돌리기 확인 */
+dialog { max-width: min(440px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 16px; padding: 24px 22px; color: var(--ink); background: var(--card); }
+dialog::backdrop { background: rgba(27, 33, 30, .35); }
+dialog p { margin-top: 10px; overflow-wrap: anywhere; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+
+@media (max-width: 480px) {
+  .bar, main { padding-left: 14px; padding-right: 14px; }
+  .panel { padding: 20px 16px; }
+  .login { margin-top: 24px; padding: 24px 18px; }
+  #publish { justify-self: stretch; }
+  .slot-side, .slot-side .quiet-button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
