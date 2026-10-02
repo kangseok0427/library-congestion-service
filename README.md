@@ -62,6 +62,14 @@ Excel 갱신 시에는 위 `library_etl refresh`를 사용합니다. 부분 날�
 
 [ADE-21 JSON 갱신 실행법·실패 보존·검증](docs/json-refresh.md)
 
+## 공통 API 계약 v2 (ADE-43)
+
+관리자 웹 전환 작업은 [공통 API 계약](contracts/README.md)과
+[`openapi-v2.yaml`](contracts/openapi-v2.yaml)을 기준으로 진행합니다. 프론트는
+`contracts/fixtures/`의 Mock 응답으로 먼저 구현하고, 백엔드는 같은 fixture를 계약
+테스트에 사용합니다. 현재 운영 v1 API가 v2 관리자 API로 바뀌는 시점은 ADE-46 병합
+후이며, 그전까지 기존 운영 경로는 유지합니다.
+
 ## 검증
 
 ### T03·T06 통계/API

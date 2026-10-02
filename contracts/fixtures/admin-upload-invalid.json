@@ -1,0 +1,13 @@
+{
+  "error": {
+    "code": "INVALID_EXCEL",
+    "message": "Excel 형식과 필수 값을 확인하세요.",
+    "details": [
+      {
+        "field": "IN_09",
+        "row": 12,
+        "reason": "숫자가 아닌 값입니다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "authenticated": true,
+  "user": {
+    "role": "admin"
+  }
+}

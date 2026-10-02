@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-05",
+  "data_status": "closed",
+  "updated_at": "2026-10-02T09:00:00+09:00",
+  "congestion": {
+    "level": null,
+    "label": "휴관일"
+  },
+  "recommendation": {
+    "message": "휴관일에는 방문 시간을 추천하지 않습니다."
+  },
+  "hourly": []
+}
