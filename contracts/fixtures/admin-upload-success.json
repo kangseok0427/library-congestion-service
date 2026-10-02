@@ -1,0 +1,14 @@
+{
+  "status": "published",
+  "version": {
+    "id": "20261002T090000+0900",
+    "created_at": "2026-10-02T09:00:00+09:00",
+    "source_name": "records.xlsx",
+    "record_count": 29376,
+    "is_active": true
+  },
+  "validation": {
+    "warning_count": 0,
+    "warnings": []
+  }
+}

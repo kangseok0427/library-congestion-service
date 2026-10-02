@@ -1,0 +1,483 @@
+openapi: 3.1.0
+info:
+  title: Library congestion shared API contract
+  version: 2.0.0
+  description: >-
+    Frozen interface for ADE-43. Administrator and visitor frontends may be
+    completed with the committed fixtures before the FastAPI implementation is ready.
+servers:
+  - url: /
+paths:
+  /api/v1/admin/session:
+    post:
+      operationId: createAdminSession
+      summary: Sign in as the library administrator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCredentials'
+      responses:
+        '200':
+          description: Authenticated; the response also sets the session cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: >-
+                library_admin_session cookie with HttpOnly, Secure, and SameSite=Lax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSessionAuthenticated'
+              examples:
+                success:
+                  externalValue: ./fixtures/admin-session-success.json
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          description: Username or password is incorrect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidCredentials:
+                  externalValue: ./fixtures/admin-session-invalid.json
+    get:
+      operationId: getAdminSession
+      summary: Read the current admin authentication state
+      responses:
+        '200':
+          description: Current authentication state.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/AdminSessionAuthenticated'
+                  - $ref: '#/components/schemas/AdminSessionAnonymous'
+    delete:
+      operationId: deleteAdminSession
+      summary: Sign out and invalidate the admin session
+      security:
+        - adminSession: []
+      responses:
+        '204':
+          description: Signed out. No response body.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /api/v1/admin/uploads:
+    post:
+      operationId: publishExcel
+      summary: Validate and publish one Excel workbook
+      description: >-
+        Accepts one .xlsx file of at most 10 MB. The active JSON changes only
+        after preprocessing and validation both succeed.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  contentMediaType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+                  contentEncoding: binary
+            encoding:
+              file:
+                contentType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        '200':
+          description: Workbook validated and its generated JSON became active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadPublished'
+              examples:
+                published:
+                  externalValue: ./fixtures/admin-upload-success.json
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          description: Another publish operation is currently holding the lock.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: PUBLISH_IN_PROGRESS
+                  message: 다른 파일을 게시하는 중입니다. 잠시 후 다시 시도하세요.
+                  details: []
+        '413':
+          description: Uploaded workbook exceeds 10 MB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FILE_TOO_LARGE
+                  message: Excel 파일은 10 MB 이하여야 합니다.
+                  details: []
+        '422':
+          description: Workbook parsing or data validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidExcel:
+                  externalValue: ./fixtures/admin-upload-invalid.json
+
+  /api/v1/admin/versions:
+    get:
+      operationId: listDataVersions
+      summary: List retained JSON versions, newest first
+      security:
+        - adminSession: []
+      responses:
+        '200':
+          description: At most four retained versions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionList'
+              examples:
+                fourVersions:
+                  externalValue: ./fixtures/admin-versions-four.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /api/v1/admin/versions/{version_id}/rollback:
+    post:
+      operationId: rollbackDataVersion
+      summary: Activate a retained JSON version
+      security:
+        - adminSession: []
+      parameters:
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/VersionId'
+      responses:
+        '200':
+          description: Selected retained version is now active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RollbackResult'
+              examples:
+                success:
+                  externalValue: ./fixtures/admin-rollback-success.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Version is not retained.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: VERSION_NOT_FOUND
+                  message: 보관 중인 데이터 버전을 찾을 수 없습니다.
+                  details: []
+        '409':
+          description: Another publish or rollback operation is currently holding the lock.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: PUBLISH_IN_PROGRESS
+                  message: 데이터를 변경하는 중입니다. 잠시 후 다시 시도하세요.
+                  details: []
+
+  /api/v1/congestion/today:
+    get:
+      operationId: getCongestionForDate
+      summary: Get hourly bars and the visitor guidance message
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: KST calendar date. Defaults to today.
+      responses:
+        '200':
+          description: Open, closed, pending, or insufficient-data result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CongestionResponse'
+              examples:
+                open:
+                  externalValue: ./fixtures/congestion-open.json
+                closed:
+                  externalValue: ./fixtures/congestion-closed.json
+                insufficient:
+                  externalValue: ./fixtures/congestion-insufficient.json
+        '400':
+          description: Date is invalid or outside the allowed window.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: library_admin_session
+
+  responses:
+    InvalidRequest:
+      description: Request body or parameters are invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: INVALID_REQUEST
+              message: 요청 내용을 확인하세요.
+              details: []
+    Unauthenticated:
+      description: A valid admin session is required.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: 관리자 로그인이 필요합니다.
+              details: []
+
+  schemas:
+    AdminCredentials:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+          writeOnly: true
+
+    AdminSessionAuthenticated:
+      type: object
+      additionalProperties: false
+      required: [authenticated, user]
+      properties:
+        authenticated:
+          const: true
+        user:
+          type: object
+          additionalProperties: false
+          required: [role]
+          properties:
+            role:
+              const: admin
+
+    AdminSessionAnonymous:
+      type: object
+      additionalProperties: false
+      required: [authenticated]
+      properties:
+        authenticated:
+          const: false
+
+    VersionId:
+      type: string
+      pattern: '^[0-9]{8}T[0-9]{6}[+-][0-9]{4}$'
+      examples: ['20261002T090000+0900']
+
+    DataVersion:
+      type: object
+      additionalProperties: false
+      required: [id, created_at, source_name, record_count, is_active]
+      properties:
+        id:
+          $ref: '#/components/schemas/VersionId'
+        created_at:
+          type: string
+          format: date-time
+        source_name:
+          type: string
+          minLength: 1
+        record_count:
+          type: integer
+          minimum: 0
+        is_active:
+          type: boolean
+
+    ValidationWarning:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        row:
+          type: [integer, 'null']
+          minimum: 1
+
+    ValidationSummary:
+      type: object
+      additionalProperties: false
+      required: [warning_count, warnings]
+      properties:
+        warning_count:
+          type: integer
+          minimum: 0
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationWarning'
+
+    UploadPublished:
+      type: object
+      additionalProperties: false
+      required: [status, version, validation]
+      properties:
+        status:
+          const: published
+        version:
+          $ref: '#/components/schemas/DataVersion'
+        validation:
+          $ref: '#/components/schemas/ValidationSummary'
+
+    VersionList:
+      type: object
+      additionalProperties: false
+      required: [versions, active_version_id, max_versions]
+      properties:
+        versions:
+          type: array
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/DataVersion'
+        active_version_id:
+          $ref: '#/components/schemas/VersionId'
+        max_versions:
+          const: 4
+
+    RollbackResult:
+      type: object
+      additionalProperties: false
+      required: [status, active_version_id]
+      properties:
+        status:
+          const: rolled_back
+        active_version_id:
+          $ref: '#/components/schemas/VersionId'
+
+    ErrorDetail:
+      type: object
+      additionalProperties: true
+      properties:
+        field:
+          type: [string, 'null']
+        row:
+          type: [integer, 'null']
+        reason:
+          type: [string, 'null']
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+
+    CongestionLevel:
+      type: [string, 'null']
+      enum: [quiet, normal, busy, null]
+
+    HourlyCongestion:
+      type: object
+      required: [hour, estimated_present, level, label, quality_status]
+      properties:
+        hour:
+          type: integer
+          minimum: 0
+          maximum: 23
+        estimated_present:
+          type: [integer, 'null']
+          minimum: 0
+        level:
+          $ref: '#/components/schemas/CongestionLevel'
+        label:
+          type: string
+        quality_status:
+          type: string
+      additionalProperties: true
+
+    CongestionResponse:
+      type: object
+      required: [date, data_status, updated_at, congestion, recommendation, hourly]
+      properties:
+        date:
+          type: string
+          format: date
+        data_status:
+          type: string
+          enum: [forecast, partial, pending, closed]
+        updated_at:
+          type: string
+          format: date-time
+        congestion:
+          type: object
+          required: [level, label]
+          properties:
+            level:
+              $ref: '#/components/schemas/CongestionLevel'
+            label:
+              type: string
+          additionalProperties: true
+        recommendation:
+          type: object
+          required: [message]
+          properties:
+            message:
+              type: string
+          additionalProperties: true
+        hourly:
+          type: array
+          items:
+            $ref: '#/components/schemas/HourlyCongestion'
+      additionalProperties: true
+

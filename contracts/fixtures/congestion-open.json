@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-02",
+  "data_status": "forecast",
+  "updated_at": "2026-10-02T09:00:00+09:00",
+  "congestion": {
+    "level": null,
+    "label": "시간대별 예측 참고"
+  },
+  "recommendation": {
+    "message": "12시~14시가 과거 추정 체류 인원 기준으로 한산합니다. 실제 운영시간·휴관 여부를 확인한 뒤 방문하세요."
+  },
+  "hourly": [
+    {
+      "hour": 9,
+      "estimated_present": 14,
+      "level": "normal",
+      "label": "보통",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 10,
+      "estimated_present": 14,
+      "level": "normal",
+      "label": "보통",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 11,
+      "estimated_present": 14,
+      "level": "normal",
+      "label": "보통",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 12,
+      "estimated_present": 6,
+      "level": "quiet",
+      "label": "여유",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 13,
+      "estimated_present": 8,
+      "level": "quiet",
+      "label": "여유",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 14,
+      "estimated_present": 8,
+      "level": "quiet",
+      "label": "여유",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 15,
+      "estimated_present": 8,
+      "level": "quiet",
+      "label": "여유",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 16,
+      "estimated_present": 10,
+      "level": "normal",
+      "label": "보통",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 17,
+      "estimated_present": 25,
+      "level": "busy",
+      "label": "혼잡",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 18,
+      "estimated_present": 17,
+      "level": "normal",
+      "label": "보통",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 19,
+      "estimated_present": 18,
+      "level": "busy",
+      "label": "혼잡",
+      "quality_status": "forecast"
+    },
+    {
+      "hour": 20,
+      "estimated_present": 14,
+      "level": "normal",
+      "label": "보통",
+      "quality_status": "forecast"
+    }
+  ]
+}
