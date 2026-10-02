@@ -1,20 +1,16 @@
-// T05 (ADE-9) 이용자 웹. 데이터는 api.js를 통해서만 받습니다.
+// T05 이용자 웹. ADE-49에서 막대와 방문 안내 멘트만 남기도록 단순화했습니다.
+// 데이터는 api.js를 통해서만 받고, 혼잡 단계는 서버가 준 level/label을 그대로 씁니다.
 const $ = id => document.getElementById(id);
 const LABEL = { quiet: '여유', normal: '보통', busy: '혼잡' };
-const METHOD = { same_weekday_hour: '같은 요일·시간 평균', same_weekday_same_hour: '같은 요일·시간 평균', same_hour_fallback: '같은 시간 평균 (요일 자료 부족)',
-  observed_cumulative: '오늘 누적 IN − OUT', insufficient_samples: '표본 부족', unavailable: '자료 부족' };
-// ADE-40 quality_status: 값이 없을 때 이유를 그대로 보여 줍니다. 0명이나 '여유'로 바꾸지 않습니다.
+// 값이 없을 때 이유. 0명이나 '여유'로 바꾸지 않습니다(ADE-40/41).
 const QUALITY = { missing_out: 'OUT 결측', partial: '부분 수집', missing_gate: '출입구 누락', negative_balance: '누적 음수',
   insufficient_data: '자료 부족', insufficient_samples: '표본 부족' };
-// 지표: ADE-40 응답(hourly에 estimated_present)이면 추정 체류 인원, 아니면 기존 예상 방문량.
-// 기존 방문량을 체류 인원으로 이름만 바꿔 보여 주지 않기 위해 응답 필드로만 판단합니다.
+// 막대 높이 지표. estimated_present가 없는 예전 응답은 예상 방문량으로 그리되 이름을 바꿔 붙이지 않습니다.
 const METRIC = {
-  present: { key: 'estimated_present', name: '추정 체류 인원', basis: '과거 유효 자료의 추정 체류 인원(누적 IN − OUT) 기준입니다. 정확한 실시간 인원이나 좌석 점유율이 아닙니다.' },
-  visitors: { key: 'expected_visitors', name: '예상 방문량', basis: '과거 이용 패턴으로 계산한 예상 방문량 기준입니다. 현재 체류인원이 아닙니다.' },
+  present: { key: 'estimated_present', basis: '막대 높이는 과거 자료로 추정한 체류 인원입니다. 정확한 실시간 인원이나 좌석 점유율이 아닙니다.' },
+  visitors: { key: 'expected_visitors', basis: '막대 높이는 과거 이용 패턴으로 계산한 예상 방문량입니다. 현재 체류 인원이 아닙니다.' },
 };
-let shown = METRIC.visitors;   // 제목·안내가 오류 화면에서도 서로 어긋나지 않게
-// 휴관일처럼 시간대가 없으면 직전 지표 문구를 그대로 둡니다.
-const metricOf = hourly => !hourly.length ? shown : hourly.some(h => 'estimated_present' in h) ? METRIC.present : METRIC.visitors;
+const metricOf = hourly => hourly.some(h => 'estimated_present' in h) || !hourly.some(h => 'expected_visitors' in h) ? METRIC.present : METRIC.visitors;
 let generation = 0;
 
 const kstDate = (value = new Date()) => {
@@ -33,73 +29,77 @@ function setDateWindow(range) {
   $('date').max = range.max_date;
 }
 const fmtTime = iso => { const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
-const koDate = ymd => { const [y, m, d] = ymd.split('-'); const w = '일월화수목금토'[new Date(`${ymd}T00:00:00Z`).getUTCDay()]; return `${Number(m)}월 ${Number(d)}일 (${w})`; };
+const koDate = ymd => { const [, m, d] = ymd.split('-'); const w = '일월화수목금토'[new Date(`${ymd}T00:00:00Z`).getUTCDay()]; return `${Number(m)}월 ${Number(d)}일 (${w})`; };
+
+function setGuide(state, when, title, message) {
+  $('guide').hidden = false;
+  $('guide').dataset.state = state;
+  $('guide-when').textContent = when;
+  $('guide-title').textContent = title;
+  $('guide-title').hidden = !title;
+  $('guide-message').textContent = message;
+}
 
 function clear() {
-  $('hourly').replaceChildren(); $('chart').replaceChildren();
-  $('now').dataset.level = ''; $('now-when').textContent = '불러오는 중'; $('level').textContent = '—'; $('level').classList.remove('small');
-  $('best').textContent = '—'; $('recommendation').textContent = '';
-  $('detail').textContent = '시간대를 선택하세요.';
-  $('actual').textContent = '불러오는 중'; $('actual-note').textContent = '';
-  $('basis').textContent = shown.basis;
-  $('updated').textContent = ''; $('reference').textContent = ''; $('hours-note').textContent = '';
+  $('chart').replaceChildren();
+  $('detail').textContent = '막대를 누르면 그 시간대 상태가 보입니다.';
+  $('hours').hidden = false;
+  setGuide('loading', '불러오는 중', '', '');
+  $('updated').textContent = ''; $('hours-note').textContent = '';
   $('sample').hidden = true;
 }
 
 function showError(message) {
   clear();
-  $('now-when').textContent = '안내를 불러올 수 없습니다'; $('level').textContent = '—';
-  $('actual').textContent = '자료 없음';
+  // 이전 날짜의 막대·안내가 남아 있지 않게 둘 다 숨깁니다.
+  $('guide').hidden = true;
+  $('hours').hidden = true;
   $('error').textContent = message; $('error').hidden = false;
 }
 
-function setMetric(metric) {
-  shown = metric;
-  $('hours-title').textContent = `시간대별 ${metric.name}`;
-  $('metric-col').textContent = metric.name;
-  $('chart').setAttribute('aria-label', `시간대별 ${metric.name} 그래프`);
-}
-
-// 표·막대·상세·접근성 문구가 모두 이 결과 하나를 씁니다.
+// 막대·상세·접근성 문구가 모두 이 결과 하나를 씁니다. 숫자는 화면에 쓰지 않습니다.
 function describe(h, metric) {
   const value = h[metric.key] ?? null;
   const level = value === null ? null : h.level ?? null;   // 값이 없으면 단계 색도 쓰지 않음
-  const missing = QUALITY[h.quality_status];
-  const visitors = value === null ? (missing && missing !== '자료 부족' ? `추정 불가 (${missing})` : '자료 부족') : `약 ${value}명`;
-  const label = LABEL[level] ?? (value === null ? '자료 부족' : '판정 불가');
-  const diff = h.difference_rate == null ? '비교 자료 없음' : `${h.difference_rate > 0 ? '+' : ''}${h.difference_rate}%`;
-  const method = h.calculation_basis ?? h.method;
-  const basis = `${METHOD[method] ?? method} · ${h.sample_count}건`;
-  return { value, level, visitors, label, diff, basis };
+  let text;
+  if (value === null) {
+    const reason = QUALITY[h.quality_status];
+    text = reason && reason !== '자료 부족' ? `자료 부족 (${reason})` : '자료 부족';
+  } else {
+    text = level ? (h.label || LABEL[level]) : '판정 불가';
+  }
+  return { value, level, text };
 }
 
-function renderHours(hourly, isToday, nowHour, metric) {
+function renderBars(hourly, metric, currentHour) {
   const rows = hourly.map(h => describe(h, metric));
   const max = Math.max(1, ...rows.map(d => d.value ?? 0));
   hourly.forEach((h, i) => {
     const d = rows[i];
     const hour = h.start_hour ?? h.hour;
-    const timeLabel = `${hour}~${h.end_hour ?? hour + 1}시`;
-    // 표 (접근성·검증용)
-    const row = document.createElement('tr');
-    [timeLabel, d.visitors, d.label, d.diff, d.basis].forEach(v => { const td = document.createElement('td'); td.textContent = v; row.append(td); });
-    $('hourly').append(row);
-    // 막대
+    const time = `${hour}~${h.end_hour ?? hour + 1}시`;
+    const current = hour === currentHour;
     const col = document.createElement('button');
-    col.type = 'button'; col.className = 'column' + (isToday && hour === nowHour ? ' current' : '');
-    col.setAttribute('aria-label', `${timeLabel} ${metric.name} ${d.visitors} ${d.label}`);
+    col.type = 'button';
+    col.className = 'column' + (current ? ' current' : '');
+    col.dataset.hour = hour;
+    col.dataset.level = d.level ?? 'none';
+    col.dataset.present = d.value ?? '';
+    col.setAttribute('aria-label', `${time} ${d.text}${current ? ', 지금' : ''}`);
     const bar = document.createElement('div');
     bar.className = 'bar ' + (d.level ?? 'none');
-    bar.style.height = d.value === null ? '3px' : `${Math.max(4, d.value / max * 100)}%`;
+    // 자료 부족은 0으로 그리지 않고 같은 높이의 회색 짧은 막대로 구분합니다.
+    bar.style.height = d.value === null ? '8px' : `${Math.max(4, d.value / max * 100)}%`;
     const lab = document.createElement('span'); lab.textContent = hour;
     col.append(bar, lab);
     col.addEventListener('click', () => {
       document.querySelectorAll('.column.selected').forEach(c => c.classList.remove('selected'));
       col.classList.add('selected');
-      $('detail').textContent = `${timeLabel} · ${metric.name} ${d.visitors} · ${d.label} · 평소 대비 ${d.diff} · ${d.basis}`;
+      $('detail').textContent = `${time} ${d.text}`;
     });
     $('chart').append(col);
   });
+  return rows;
 }
 
 async function load() {
@@ -121,50 +121,29 @@ async function load() {
       showError('선택한 날짜의 예측을 받지 못했습니다. 잠시 후 다시 시도하세요.');
       return;
     }
-    const metric = metricOf(data.hourly);
-    const nowHour = kstHour(data.reference_time);
-    const isToday = day === kstDate(data.reference_time);
-    const closed = data.data_status === 'closed';
+    const reference = data.reference_time || new Date().toISOString();
+    const isToday = day === kstDate(reference);
+    const when = `${isToday ? '오늘 ' : ''}${koDate(day)}`;
+    const message = (data.recommendation && data.recommendation.message) || '';
 
     $('library').textContent = meta.library_name;
     $('sample').hidden = !data.is_sample;
-
-    // 지금 / 선택한 날짜 요약
-    $('now').dataset.level = data.congestion.level ?? '';
-    $('now-when').textContent = isToday ? `오늘 ${koDate(day)} · ${nowHour}시 기준` : `${koDate(day)} · 시간대별 예측`;
-    $('level').textContent = data.congestion.label;
-    // 단계가 없을 때(다른 날짜 조회·자료 부족)는 큰 글자 대신 안내 문장 크기로
-    $('level').classList.toggle('small', !data.congestion.level);
-    $('basis').textContent = metric.basis;
-    if (data.basis) $('basis').textContent = data.basis + (metric === METRIC.present ? '. 정확한 실시간 인원이나 좌석 점유율이 아닙니다.' : '. 과거 이용 패턴으로 계산한 예상값입니다.');
-
-    // 추천
-    const r = data.recommendation;
-    $('best').textContent = closed ? '휴관일' : !r.best_start_hour ? '추천 자료 부족' : `${r.best_start_hour}시 – ${r.best_end_hour}시`;
-    $('recommendation').textContent = r.message;
-
-    setMetric(metric);
-    renderHours(data.hourly, isToday, nowHour, metric);
-    if (closed) $('detail').textContent = '휴관일에는 시간대별 예측을 제공하지 않습니다.';
-
-    $('updated').textContent = '데이터 갱신 ' + fmtTime(data.updated_at);
-    $('reference').textContent = '예측 기준 시각 ' + fmtTime(data.reference_time);
+    $('updated').textContent = data.updated_at ? '데이터 갱신 ' + fmtTime(data.updated_at) : '';
     $('hours-note').textContent = meta.hours_note ?? '';
 
-    // 실제 집계 (있을 때만)
-    try {
-      const s = await api.stats(day);
-      if (current !== generation) return;
-      if (s.data_status === 'closed' || s.data_status === 'pending') {
-        $('actual').textContent = s.data_status === 'closed' ? '휴관일' : '집계 전';
-        return;
-      }
-      const status = s.data_status === 'partial' ? '현재까지 집계된 데이터 (부분 데이터)' : '완료된 수집 데이터';
-      $('actual').textContent = `${status} · 운영시간 IN ${s.hourly_total_in}명 / OUT ${s.hourly_total_out === null ? '집계 미제공' : s.hourly_total_out + '명'}`;
-      $('actual-note').textContent = '운영시간 내 수집값만 합산합니다. 원본 일일 합계는 별도로 보존합니다.';
-    } catch (e) {
-      if (current !== generation) return;
-      $('actual').textContent = e.code === 'DATA_NOT_FOUND' ? '이 날짜의 수집 데이터가 아직 없습니다.' : e.message;
+    if (data.data_status === 'closed') {
+      setGuide('closed', when, '휴관일', message);
+      $('hours').hidden = true;
+      return;
+    }
+
+    const metric = metricOf(data.hourly);
+    $('basis').textContent = metric.basis;
+    const rows = renderBars(data.hourly, metric, isToday ? kstHour(reference) : null);
+    if (!rows.some(d => d.value !== null)) {
+      setGuide('insufficient', when, '자료 부족', message || '이 날짜는 예측에 쓸 자료가 부족합니다.');
+    } else {
+      setGuide('open', when, '', message);
     }
   } catch (e) {
     if (current !== generation) return;
@@ -174,8 +153,6 @@ async function load() {
 
 $('date').value = kstDate();
 setDateWindow({ min_date: $('date').value, max_date: addDays($('date').value, 7) });
-// 화면이 넓으면 표를 기본으로 펼침. 모바일은 접어 둠.
-document.querySelector('details').open = window.matchMedia('(min-width: 600px)').matches;
 $('date-form').addEventListener('submit', e => { e.preventDefault(); load(); });
 $('refresh').addEventListener('click', load);
 load();
