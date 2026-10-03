@@ -2,7 +2,10 @@
 
 ## 현재 배포 구조
 
-`도서관 PC Excel 변환기 → 인증 업로드 API → 홈 디렉터리 records.json → FastAPI → 이용자 웹`
+Week 4 목표: `관리자 웹 Excel 업로드 → 서버 공용 전처리·검증 → 홈 디렉터리 records.json → FastAPI → 이용자 웹`
+
+관리자 로그인·업로드·4세대 버전·롤백은 ADE-45/46/47 통합과 ADE-50 검증 후 운영에
+반영합니다. 아래 호스팅 준비 절차가 새 관리자 기능의 배포 완료를 뜻하지 않습니다.
 
 - 수요일 MVP는 PythonAnywhere 무료 계정의 기본 주소를 사용합니다.
 - FastAPI와 프론트 정적 파일은 하나의 ASGI 앱에서 함께 제공합니다.
@@ -45,8 +48,8 @@ python -c "from scripts.serve import bootstrap_records; bootstrap_records()"
 ```
 
 `bootstrap_records`는 대상 파일이 이미 존재하면 덮어쓰지 않습니다. 실제 records는
-공개 Git 저장소에 commit하지 말고 PythonAnywhere Files 화면이나 향후 T12 업로드 API로
-위 경로에 반영합니다.
+공개 Git 저장소에 commit하지 않습니다. 최초 실데이터 전환은 ADE-50에서 합성 샘플을
+운영 이력에 섞지 않도록 확인한 뒤 수행합니다.
 
 ## 3. FastAPI 웹앱 생성
 
@@ -111,22 +114,14 @@ export LIBRARY_RECORDS=/home/YOURUSERNAME/library-congestion-data/records.json
 python -m library_etl refresh path/to/input.xlsx --partial-date YYYY-MM-DD
 ```
 
-갱신 실패 시 기존 정상 JSON은 유지됩니다. 문제가 생기면 error log를 확인하고 최근 정상
-백업을 같은 경로에 복구한 뒤 웹을 새로고침합니다.
+갱신 실패 시 기존 정상 JSON은 유지됩니다. 문제가 생기면 error log를 확인합니다.
+ADE-45 저장소가 통합된 경로에서는 활성 JSON과 버전 메타데이터를 함께 복구해야 하므로
+파일만 수동으로 덮어쓰지 않습니다. 통합 전후 복구는 검증된 서버 담당 절차를 따릅니다.
 
-ADE-35 배포 후에는 웹앱 실행 환경에 `ADMIN_UPLOAD_TOKEN`을 추가하고 다음 endpoint를
-사용합니다. 토큰은 충분히 긴 무작위 값으로 생성하고 Git, 문서, 채팅에 올리지 않습니다.
-
-```text
-GET  https://ade0033.pythonanywhere.com/api/v1/admin/records
-POST https://ade0033.pythonanywhere.com/api/v1/admin/records
-Authorization: Bearer <ADMIN_UPLOAD_TOKEN>
-```
-
-Windows 프로그램은 GET으로 서버 최신 스냅샷을 받은 뒤 Excel을 병합하고 POST로 전체
-검증본을 전송합니다. 정상 업로드는 운영 파일을 즉시 원자 교체하므로 별도 웹앱 reload 없이 다음 요청부터
-반영됩니다. 서버 백업은 `~/library-congestion-data/backups`, 업로드 로그는
-`~/library-congestion-data/logs/admin-upload.log`에 저장됩니다.
+관리자 웹 전환 이후의 경로·게시·롤백 절차는 [관리자 업로드 운영 안내](admin-upload.md)를
+따릅니다. 기능이 통합되기 전에는 기존 서버 담당자의 검증된 수동 절차만 사용합니다.
+기존 `ADMIN_UPLOAD_TOKEN` 인증 코드와 설정은 서버 호환을 위해 보존하지만 관리자에게
+입력을 요구하는 운영 절차는 제공하지 않습니다. 호환 경로 폐기는 ADE-50에서 결정합니다.
 
 ## 7. 중지·삭제
 
@@ -135,4 +130,4 @@ pa website delete --domain YOURUSERNAME.pythonanywhere.com
 ```
 
 웹앱을 삭제해도 홈 디렉터리의 records 파일은 별도이므로 필요 없어진 것이 확실할 때만
-직접 정리합니다. API token, 업로드 token, 실제 Excel과 실제 records는 Git에 올리지 않습니다.
+직접 정리합니다. 호스팅 비밀값, 실제 Excel과 실제 records는 Git에 올리지 않습니다.

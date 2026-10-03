@@ -89,7 +89,13 @@ python -m scripts.e2e --records data/processed/records.json --date 2026-09-10
 
 [구현·인터페이스·인수인계](docs/architecture.md) / [Git 협업](docs/git-workflow.md)
 
-도서관 PC용 Excel 변환·전송 프로그램: [ADE-37 Windows 안내](docs/windows-uploader.md).
+## 관리자 웹 업로드 전환 (Week 4)
 
-운영자 업로드 API는 `POST /api/v1/admin/records`이며 `ADMIN_UPLOAD_TOKEN` 환경변수의
-Bearer 토큰을 요구합니다. 검증된 전체 records 배열만 운영 파일에 원자적으로 반영합니다.
+공식 갱신 경로는 관리자 웹에서 Excel을 업로드하는 방식으로 전환합니다.
+설치형 업로더 패키지와 빌드 도구는 제거했습니다. 공용 `library_etl` 전처리는 보존합니다.
+[관리자 업로드 운영 안내](docs/admin-upload.md)에 전환 단계와 검증 조건을 정리했습니다.
+로그인·업로드·버전·롤백의 API v2는 계약이 고정된 상태이며 ADE-46/47 구현 및
+ADE-50 통합 검증 전에는 운영 가능한 화면으로 안내하지 않습니다.
+
+기존 `/api/v1/admin/records` 인증 설정과 서버 API는 호환을 위해 유지합니다.
+이 경로는 새 관리자 웹의 계약이 아니며, 폐기 시점과 비밀값 정리는 ADE-50에서 확인합니다.
