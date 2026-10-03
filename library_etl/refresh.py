@@ -9,24 +9,13 @@ from backend.adapters import read_records
 from backend.domain import DataError, validate_records
 from backend.service import LibraryService
 from .pipeline import preprocess
+from .locking import data_lock, storage_directory
 
 
 @contextmanager
 def writer_lock(destination, report):
-    # Atomic mkdir also excludes independent CLI processes. Never break another
-    # writer's lock; after a crash an operator must verify and remove it.
-    lock = destination.with_name(f'.{destination.name}.lock')
-    try:
-        lock.mkdir()
-    except FileExistsError as exc:
-        raise DataError('갱신 작업이 진행 중이거나 잠금이 남아 있습니다.') from exc
-    try:
+    with data_lock(destination):
         yield
-    finally:
-        try:
-            lock.rmdir()
-        except OSError:
-            report.setdefault('cleanup_warnings', []).append(f'갱신 잠금 정리 실패: {lock.name}')
 
 
 def merge_records(existing, incoming):
@@ -47,11 +36,16 @@ def refresh(source, destination, *, rebuild_fn=None, **options):
         from scripts.rebuild import rebuild
         rebuild_fn = rebuild
     destination = Path(destination).resolve()
+    if (storage_directory(destination) / 'state.sqlite3').exists():
+        from .versions import VersionStore
+        return VersionStore(destination, rebuild_fn=rebuild_fn).upload_excel(source, **options)
     stage = 'preprocess'
     try:
         incoming, report = preprocess(source, **options)
         destination.parent.mkdir(parents=True, exist_ok=True)
         with writer_lock(destination, report):
+            if (storage_directory(destination) / 'state.sqlite3').exists():
+                raise DataError('버전 저장소가 초기화됐습니다. 갱신을 다시 요청하세요.', 'PUBLISH_IN_PROGRESS')
             stage = 'merge'
             existing = read_records(destination) if destination.exists() else []
             merged = merge_records(existing, incoming)

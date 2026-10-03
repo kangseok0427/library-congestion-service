@@ -65,10 +65,14 @@ class RecordsPublisher:
         self.lock = Lock()
 
     def publish(self, records):
+        from library_etl.locking import data_lock, storage_directory
         if not records:
             raise DataError('빈 records 배열은 업로드할 수 없습니다.')
         clean = validate_records(records)
-        with self.lock:
+        with self.lock, data_lock(self.path):
+            if (storage_directory(self.path) / 'state.sqlite3').exists():
+                raise UploadAPIError('버전 관리 데이터는 관리자 Excel 업로드를 사용하세요.',
+                                     'PUBLISH_IN_PROGRESS', 409)
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if self._same_snapshot(clean):
                 return {'changed': False, 'backup': None, 'record_count': len(clean)}

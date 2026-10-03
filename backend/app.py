@@ -33,9 +33,8 @@ class FileProvider:
                 # Read bytes and metadata from one handle so a replacement cannot
                 # pair the old signature with a new file. Content detects equal
                 # size/mtime updates as well as rapid consecutive replacements.
-                with self.path.open('rb') as stream:
-                    stat = os.fstat(stream.fileno())
-                    payload = stream.read()
+                from library_etl.versions import VersionStore
+                payload, stat = VersionStore(self.path).read_snapshot()
                 signature = (stat.st_mtime_ns, hashlib.sha256(payload).digest())
                 if signature != self.signature:
                     service = LibraryService(json.loads(payload.decode('utf-8-sig')),
@@ -59,7 +58,8 @@ def create_app(provider=None, clock=now_kst, upload_token=None,
 
     @app.exception_handler(DataError)
     async def data_error(request, exc):
-        status = 404 if exc.code == 'DATA_NOT_FOUND' else 400 if exc.code == 'INVALID_DATE' else 422
+        status = (409 if exc.code == 'PUBLISH_IN_PROGRESS' else
+                  404 if exc.code == 'DATA_NOT_FOUND' else 400 if exc.code == 'INVALID_DATE' else 422)
         return JSONResponse(status_code=status, content={'error': {'code': exc.code, 'message': str(exc)}})
 
     @app.exception_handler(RequestValidationError)
@@ -90,6 +90,8 @@ def create_app(provider=None, clock=now_kst, upload_token=None,
                 publisher.log('rejected', exc.code)
             raise
         except DataError as exc:
+            if exc.code == 'PUBLISH_IN_PROGRESS':
+                raise UploadAPIError(str(exc), exc.code, 409) from exc
             code = 'GATE_ROW_DUPLICATED' if '중복 date+gate+hour' in str(exc) else 'PROCESSING_ERROR'
             publisher.log('rejected', code)
             raise UploadAPIError('records 스키마 검증에 실패했습니다.', code, 422) from exc
