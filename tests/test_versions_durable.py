@@ -37,7 +37,8 @@ def test_metadata_replace_and_recovery_fsync_failures(tmp_path, monkeypatch, ope
     def replace(source, destination):
         nonlocal replaced
         real_replace(source, destination)
-        if Path(destination) == store.metadata:
+        if (Path(destination) == store.metadata
+                and json.loads(store.metadata.read_bytes())['active_version_id'] != before['active_version_id']):
             replaced = True
             if os.name == 'nt':
                 raise OSError('after metadata rename (Windows has no directory fsync)')
@@ -122,7 +123,8 @@ def test_recovery_sigkill_is_repeatable(tmp_path, monkeypatch, operation, bounda
     def replace(source, destination):
         nonlocal replaced
         real_replace(source, destination)
-        if Path(destination) == store.metadata:
+        if (Path(destination) == store.metadata
+                and json.loads(store.metadata.read_bytes())['active_version_id'] != before['active_version_id']):
             replaced = True
     def fsync(fd):
         if replaced:
@@ -250,7 +252,8 @@ def test_failed_initial_registration_retries_without_changing_original(tmp_path,
     def replace(source, destination):
         nonlocal replaced
         real_replace(source, destination)
-        if Path(destination) == store.metadata:
+        if (Path(destination) == store.metadata
+                and json.loads(store.metadata.read_bytes())['active_version_id'] is not None):
             replaced = True
             if os.name == 'nt':
                 raise OSError('failure after bootstrap metadata replacement')

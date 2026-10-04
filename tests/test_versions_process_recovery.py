@@ -43,6 +43,7 @@ from scripts.rebuild import rebuild
 path, source, stage, target = sys.argv[1:]
 path = Path(path)
 store = VersionStore(path)
+old_active = store.list_versions()['active_version_id']
 def pause():
     print('paused', flush=True)
     sys.stdin.readline()
@@ -58,7 +59,8 @@ elif stage in ('version', 'active', 'metadata', 'rollback_metadata', 'decision',
         dest = Path(destination)
         if ((stage == 'active' and dest == path)
                 or (stage == 'version' and dest.parent == store.directory and module.VERSION_ID.fullmatch(dest.stem))
-                or (stage in ('metadata', 'rollback_metadata') and dest == store.metadata)
+                or (stage in ('metadata', 'rollback_metadata') and dest == store.metadata
+                    and module.json.loads(dest.read_bytes())['active_version_id'] != old_active)
                 or (stage in ('decision', 'rollback_decision') and dest == store.recovery
                     and module.json.loads(dest.read_bytes())['phase'] == 'committed')):
             pause()

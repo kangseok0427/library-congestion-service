@@ -7,6 +7,7 @@ import tempfile
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 from backend.domain import DataError, validate_records
 from backend.library_hours import KST
@@ -17,6 +18,7 @@ from .refresh import merge_records
 
 MAX_VERSIONS = 4
 VERSION_ID = re.compile(r'^[0-9]{8}T[0-9]{6}[+-][0-9]{4}$')
+TRANSACTION_ID = re.compile(r'^[0-9a-f]{32}$')
 
 
 class VersionError(DataError):
@@ -103,7 +105,7 @@ class VersionStore:
     def _initialize(self):
         if self.metadata.exists():
             return self._load_state()
-        state = dict(format_version=1, active_version_id=None, versions=[])
+        state = self._empty_state()
         self._require_clean(state)
         payload = None
         row = None
@@ -122,12 +124,35 @@ class VersionStore:
         self._activate(None, state, payload, row, initialize=True)
         return state
 
-    def _load_state(self):
-        return self._validate_state(json.loads(self.metadata.read_bytes()))
+    def _empty_state(self):
+        return dict(format_version=2, generation=0, transaction_id=None,
+                    recovery_required=False, recovery_digest=None,
+                    active_version_id=None, versions=[])
+
+    def _load_state(self, *, allow_pending=False):
+        state = self._validate_state(json.loads(self.metadata.read_bytes()))
+        if state['recovery_required'] and not allow_pending:
+            raise DataError('복구 필수 상태의 기록이 없거나 복구가 완료되지 않았습니다.')
+        return state
 
     def _validate_state(self, state):
-        if (not isinstance(state, dict) or set(state) != {'format_version', 'active_version_id', 'versions'}
-                or state['format_version'] != 1 or not isinstance(state['versions'], list)
+        if isinstance(state, dict) and state.get('format_version') == 1:
+            # Format one cannot distinguish a finalized state from a failed
+            # publication whose journal was removed. Never infer its decision.
+            raise DataError('이전 메타데이터 형식은 확정 여부를 판별할 수 없습니다. 전체 백업과 진단이 필요합니다.')
+        if (not isinstance(state, dict) or set(state) != {
+                'format_version', 'generation', 'transaction_id', 'recovery_required',
+                'recovery_digest', 'active_version_id', 'versions'}
+                or type(state['format_version']) is not int or state['format_version'] != 2
+                or type(state['generation']) is not int or state['generation'] < 0
+                or type(state['recovery_required']) is not bool
+                or (state['generation'] == 0 and state['transaction_id'] is not None)
+                or (state['generation'] > 0 and (not isinstance(state['transaction_id'], str)
+                    or not TRANSACTION_ID.fullmatch(state['transaction_id'])))
+                or (state['recovery_required'] and (not isinstance(state['recovery_digest'], str)
+                    or not re.fullmatch('[0-9a-f]{64}', state['recovery_digest'])))
+                or (not state['recovery_required'] and state['recovery_digest'] is not None)
+                or not isinstance(state['versions'], list)
                 or len(state['versions']) > MAX_VERSIONS):
             raise DataError('버전 메타데이터가 손상되었습니다.')
         ids = []
@@ -244,10 +269,14 @@ class VersionStore:
     def _recover_transaction(self):
         if not self.recovery.exists():
             return
-        record = json.loads(self.recovery.read_bytes())
+        try:
+            record = json.loads(self.recovery.read_bytes())
+        except (ValueError, UnicodeError) as exc:
+            raise DataError('복구 기록의 JSON이 손상되었습니다.') from exc
         if (not isinstance(record, dict)
-                or set(record) != {'format_version', 'phase', 'initialize', 'previous', 'next'}
-                or record['format_version'] != 1
+                or set(record) != {'format_version', 'generation', 'transaction_id',
+                                  'phase', 'initialize', 'previous', 'next'}
+                or type(record['format_version']) is not int or record['format_version'] != 2
                 or record['phase'] not in ('prepared', 'committed')
                 or type(record['initialize']) is not bool
                 or (record['previous'] is None) != record['initialize']):
@@ -255,6 +284,26 @@ class VersionStore:
         self._validate_state(record['next'])
         if record['previous'] is not None:
             self._validate_state(record['previous'])
+        previous, next_state = record['previous'], record['next']
+        if (next_state['recovery_required']
+                or (previous is not None and previous['recovery_required'])
+                or record['transaction_id'] != next_state['transaction_id']
+                or type(record['generation']) is not int
+                or record['generation'] != next_state['generation']
+                or record['generation'] != (previous['generation'] if previous else 0) + 1):
+            raise DataError('복구 기록의 트랜잭션 연결이 일치하지 않습니다.')
+        current = self._load_state(allow_pending=True) if self.metadata.exists() else None
+        # Validate the entire relationship before any write or garbage collection.
+        pending_previous = self._pending_state(previous or self._empty_state(), record)
+        pending_next = self._pending_state(next_state, record)
+        if record['phase'] == 'prepared':
+            # Journal durable before marker, or either predecision metadata.
+            allowed = [previous, pending_previous, pending_next]
+        else:
+            # Final decision is only written after the next metadata is durable.
+            allowed = [pending_next, next_state]
+        if current not in allowed:
+            raise DataError('현재 메타데이터와 복구 기록의 ID·세대·상태가 일치하지 않습니다.')
         state = record['next'] if record['phase'] == 'committed' else record['previous']
         if state is None:
             # Initial registration never writes the original live file.
@@ -271,6 +320,12 @@ class VersionStore:
             self._commit(state)
         # Keep the decision replayable until both files have been restored.
         self._finish_transaction()
+
+    def _pending_state(self, state, record):
+        intent = {key: value for key, value in record.items() if key != 'phase'}
+        return {**state, 'generation': record['generation'],
+                'transaction_id': record['transaction_id'], 'recovery_required': True,
+                'recovery_digest': hashlib.sha256(encoded(intent)).hexdigest()}
 
     def _finish_transaction(self):
         self.recovery.unlink()
@@ -290,15 +345,21 @@ class VersionStore:
         return True
 
     def _activate(self, previous, state, payload, row=None, *, initialize=False):
-        record = dict(format_version=1, phase='prepared', initialize=initialize,
+        state.update(format_version=2, generation=(previous['generation'] if previous else 0) + 1,
+                     transaction_id=uuid4().hex, recovery_required=False, recovery_digest=None)
+        record = dict(format_version=2, phase='prepared', initialize=initialize,
+                      generation=state['generation'], transaction_id=state['transaction_id'],
                       previous=previous, next=state)
         try:
             atomic_bytes(self.recovery, encoded(record), records=False)
+            # Durably require this exact journal before touching snapshots/live data.
+            atomic_bytes(self.metadata, encoded(self._pending_state(previous or self._empty_state(), record)),
+                         records=False)
             if row is not None:
                 atomic_bytes(self.directory / (row['id'] + '.json'), payload)
             if not initialize:
                 atomic_bytes(self.path, payload)
-            self._commit(state)
+            self._commit(self._pending_state(state, record))
             finalized = self._decision(record)
         except BaseException:
             self._recover_transaction()
@@ -307,6 +368,7 @@ class VersionStore:
             raise
         if finalized:
             try:
+                self._commit(state)  # Settle only after the final decision.
                 self._finish_transaction()
             except OSError:
                 # Already committed: cleanup/recovery failure cannot return 500.
@@ -350,8 +412,8 @@ class VersionStore:
         self._require_clean(previous)
         payload = self._prepared(records)
         row = self._new_row(payload, source_name, previous)
-        state = dict(format_version=1, active_version_id=row['id'],
-                     versions=([row] + previous['versions'])[:MAX_VERSIONS])
+        state = {**previous, 'active_version_id': row['id'],
+                 'versions': ([row] + previous['versions'])[:MAX_VERSIONS]}
         self._activate(previous, state, payload, row)
         return self._version(row, row['id'])
 

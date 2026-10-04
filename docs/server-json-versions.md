@@ -2,21 +2,21 @@
 
 갱신일: 2026-10-04. 브랜치: `codex/ADE-45-server-json-versions`.
 팀 PR #20, 대상 `develop`. 작업 경로는 `C:\study\library-service-ade45`입니다.
-P1/P2 수정 전 HEAD와 fork 브랜치는 `de75697c3e0837f81dd947bdb9ae6a0eff16c925`,
-fetch 후 develop은 `95ed76e3f925ed450ded869182a904d74f185547`로 추가 변경이 없었습니다.
+이번 보완 전 HEAD와 fork 브랜치는 `6277925b084e61d2e283fb39ea2789b54154296f`,
+GitHub에서 확인한 develop은 `95ed76e3f925ed450ded869182a904d74f185547`입니다.
 미커밋 변경은 없었고 저장소 및 상위 경로에 AGENTS.md는 없었습니다.
 README, 협업·구조·갱신·검증·호스팅 지침, CI, OpenAPI v2와 관련 fixture를 확인했습니다.
 
 ## 최신 리뷰와 범위
 
-GitHub PR #20의 2026-10-04 팀장 Changes requested 리뷰와 Linear ADE-45 본문·댓글을
-직접 확인했습니다. JSON 전용 저장과 초기 활성본 등록 요구는 사용자 기록과 일치했습니다.
-PR은 Open/Draft이며 Draft 해제 지시는 없었습니다. ADE-45는 In Progress이고 상태를 변경하지 않습니다.
+GitHub PR #20의 2026-10-04 팀장 Changes requested 리뷰를 이번 작업에서 직접 확인했습니다.
+JSON 전용 저장과 초기 활성본 등록 요구는 사용자 기록과 일치했습니다.
+PR은 Open/Draft이며 Draft 해제 지시는 없었습니다. Linear 상태는 변경하지 않습니다.
 ADE-48/PR #21은 독립 작업이며 이 브랜치에 합치지 않습니다.
 
-2026-10-04 조회에서 ADE-44·46·50은 Todo입니다. ADE-44·46 댓글·첨부 문서는 없으며,
-최신 develop과 로컬 저장소에 `docs/excel-upload-contract.md` 및 ADE-44 공통 Excel fixture는
-아직 없습니다. 팀 PR 목록에서도 해당 산출물을 찾지 못했습니다. 다른 비공개 작업의 부재를 뜻하지 않습니다.
+이전 보고의 Linear 상태 조회는 이번 작업의 새 확인 결과로 사용하지 않습니다.
+로컬 저장소에 `docs/excel-upload-contract.md` 및 ADE-44 공통 Excel fixture는 아직 없습니다.
+다른 비공개 작업의 부재를 뜻하지 않으며 ADE-44·46·50 승인·연결은 별도 의존성으로 유지합니다.
 
 공용 `pipeline.preprocess`와 `refresh.merge_records`를 재사용합니다. 필수 열·시트,
 빈값·음수·소수·수식·날짜·중복 오류, 합계 불일치 경고, 완료→partial 거부는 기존 기준을 유지합니다.
@@ -153,42 +153,88 @@ API 계층에서 확인해야 합니다. store는 자체 JSON staging만 정리�
 <LIBRARY_RECORDS>.versions/writer.lock       공용 OS 프로세스 잠금
 ```
 
-SQLite는 읽거나 생성하지 않습니다. 메타데이터 형식과 API 성공 응답은 유지하며,
-복구 기록은 `format_version=1`, `phase=prepared|committed`, `initialize`, `previous`, `next`를
-저장합니다. 이전/다음 상태에는 활성 ID·전체 등록 목록·해시가 포함됩니다. 파일 손상 시 추측하지 않고 거부합니다.
+SQLite는 읽거나 생성하지 않습니다. API 성공 응답과 VersionStore/VersionError 인터페이스는 유지합니다.
+이번 두 문제는 외부 `recovery.json` 제거·과거 파일 단독 복원으로 재현했습니다.
+SIGKILL만으로 이 파일 유실·재등장이 발생했다고 주장하지 않습니다.
+
+### 형식 2의 연결 정보
+
+metadata.json은 `format_version=2`, `generation`, `transaction_id`, `recovery_required`,
+`recovery_digest`, `active_version_id`, `versions`를 저장합니다. 세대는 성공 확정마다 1 증가하며,
+실패 작업 복구는 이전 세대를 유지합니다. 시도마다 UUID의 32자리 hex ID를 새로 만들어
+실패 후 같은 목표 세대를 재사용하더라도 서로 다른 작업임을 구분합니다. 공개 VersionId와는 별개입니다.
+
+recovery.json은 `format_version=2`, `generation`, `transaction_id`, `phase=prepared|committed`,
+`initialize`, `previous`, `next`를 저장합니다. previous/next는 복구 필수 표식이 없는 메타데이터입니다.
+목표 세대는 이전 세대+1이며, next와 기록의 ID·세대가 같아야 합니다.
+`recovery_digest`는 phase를 제외한 불변 게시 의도의 canonical JSON SHA-256입니다.
+prepared→committed 전환 중 동일하게 유지하며 기록 본문의 부분 변경을 감지합니다.
+암호화 서명·외부 DB·별도 서비스 또는 외부 인증 기준은 추가하지 않았습니다.
+
+대기 상태는 `recovery_required=false`, `recovery_digest=null`입니다. 표식이 true이면
+기록이 반드시 존재하고 ID·세대·게시 의도 digest·전체 메타데이터 상태가 일치해야 합니다.
+형식·연결·상태가 잘못되면 활성본·버전 파일을 쓰거나 정리하기 **전에** 거부합니다.
+FileProvider도 이 검증을 거쳐 조회하므로 이전 캐시가 있어도 미검증 데이터를 정상으로 반환하지 않습니다.
+
+### 저장과 최종 확정
 
 공용 OS 잠금 안에서 다음 순서로 실행합니다.
 
 1. 이전 잔여 VersionId JSON을 정리합니다. 실패하면 새 후보 생성 전에 게시를 거부합니다.
-2. 이전 상태와 게시 의도를 담은 `prepared` 복구 기록을 임시파일·fsync·원자 교체로 저장합니다.
-3. 새 버전 JSON, 활성 파일, 다음 metadata.json을 차례로 저장합니다. **메타데이터 교체만으로 확정되지 않습니다.**
-4. 복구 기록을 `committed`로 원자 교체합니다. 이것이 논리적 최종 확정 지점입니다.
-5. 복구 기록을 제거하고 디렉터리를 동기화한 뒤 오래된 버전을 정리합니다.
+2. 이전/다음 상태와 새 ID·세대를 담은 prepared 복구 기록을 저장합니다.
+3. 이전 활성 ID·목록을 유지한 채 metadata.json에 새 ID·세대·복구 필수 표식·digest를 저장합니다.
+   **이 표식이 내구성 있게 저장되기 전에는 버전 JSON과 활성 파일을 변경하지 않습니다.**
+4. 후보 버전 JSON과 활성 파일을 저장하고, 다음 활성 ID·목록을 담은 복구 필수 metadata.json을 저장합니다.
+5. 복구 기록을 committed로 원자 교체합니다. 이것이 논리적 최종 확정 지점입니다.
+6. metadata.json을 같은 ID·세대의 대기 상태로 저장합니다. 그 후 복구 기록을 제거하고 디렉터리를 동기화합니다.
+7. 오래된 버전 파일을 정리합니다.
 
 각 파일은 같은 파일시스템의 임시파일에 완성하고 파일 fsync·검증 후 os.replace합니다.
-Linux에서는 부모 디렉터리도 fsync합니다. Windows는 파일 fsync와 os.replace를 사용하며,
-동일한 디렉터리 fsync 또는 전원 장애 내구성을 보장한다고 주장하지 않습니다. 다중 파일 전체가 원자적이지 않습니다.
+Linux는 부모 디렉터리도 fsync합니다. Windows는 동일한 디렉터리 fsync를 제공하지 않습니다.
+다중 파일 전체를 원자 작업으로 보거나 실제 전원 장애 내구성을 검증했다고 표현하지 않습니다.
 
-확정 전 예외·SIGKILL은 `prepared.previous`를 기준으로 복구합니다. 따라서 새 metadata.json 교체 후
-디렉터리 fsync와 복원 쓰기의 fsync가 연속 실패해도 이전 의도가 유실되지 않습니다.
-지속 장애 중 즉시 복원은 보장할 수 없습니다. 복구 기록을 유지하고 새 게시·롤백·정리를 제한하며,
-FileProvider도 복구 미완료 새 데이터를 정상으로 제공하지 않습니다. 장애 해제 후 새 프로세스가
-이전 버전 해시를 검증하고 활성본과 metadata.json을 다시 내구성 있게 기록한 뒤 복구 기록을 제거합니다.
-파일 내용이 같아도 이전 fsync 실패 가능성이 있으므로 복구 쓰기를 생략하지 않습니다.
-복구 자체가 실패하거나 종료되면 같은 기록으로 반복 재시도합니다. 이전 정상 버전은 그동안 삭제하지 않습니다.
+최종 committed 교체 후 fsync가 실패하면 실제 교체 완료에 근거해 성공으로 판정하고,
+복구 기록과 복구 필수 메타데이터를 유지하며 정리를 보류합니다. 이후 대기 표식 저장·기록 삭제·정리
+오류도 이미 확정된 게시를 500으로 바꾸지 않습니다. 기록이 남으면 다음 잠금 작업에서 복구를 재시도합니다.
+이 예외 구간의 전원 장애 결과는 미검증입니다. 응답 전달 실패에 대한 별도 멱등성 API는 추가하지 않았습니다.
 
-최종 `committed` 교체가 보이면 새 상태를 선택합니다. 그 교체 **이후** 디렉터리 fsync가 실패하면
-실패 응답 뒤 새 게시를 유지하는 모순을 피하기 위해 published/rolled_back 성공으로 판정합니다.
-이 경우 복구 기록을 남기고 정리를 하지 않으며, 다음 잠금 작업에서 내구성·활성본·메타데이터를
-재확인/기록한 뒤 작업을 진행합니다. 논리적 확정과 전원 장애 내구성 확인은 다릅니다.
-이 예외 구간의 실제 전원 장애 결과는 미검증입니다. 최종 확정 후 복구 기록 삭제·정리 오류도
-이미 확정된 게시를 PUBLISH_FAILED로 바꾸지 않습니다. 응답 전달 전에 프로세스가 종료되거나
-네트워크가 끊긴 경우의 일반적인 재시도 멱등성 API는 추가하지 않았습니다.
+### 허용하는 복구 조합
 
-최초 등록도 같은 복구 기록을 사용하되 `initialize=true`, `previous=null`이며 원래 활성본을 쓰지 않습니다.
-실패한 등록은 다음 복구에서 불완전 메타데이터를 제거하고 원본 바이트·품질·출처를 유지해 다시 등록합니다.
-등록 전 남은 후보도 새 파일 생성 전에 정리합니다. 원래 파일의 mtime과 기존 source_file 출처를 유지하고,
-여러 프로세스/반복 초기화는 같은 OS 잠금으로 중복 정상 버전을 만들지 않습니다.
+| 기록 | 현재 메타데이터 | 선택 결과 |
+| --- | --- | --- |
+| 없음 | 형식 2 대기 상태 | 검증한 현재 상태 사용 |
+| prepared | 정확한 이전 대기 상태 | 기록 작성 후 표식 저장 전 종료: 이전 상태 |
+| prepared | 동일 ID·세대·digest의 변경 전/후 복구 필수 상태 | 이전 상태 |
+| committed | 동일 ID·세대·digest의 변경 후 복구 필수 상태 | 다음 상태 |
+| committed | 정확한 다음 대기 상태 | 대기 표식 저장 후 기록 제거 전 종료: 다음 상태 |
+| 없음 | 복구 필수 상태 | 거부: 확정 여부를 추측하지 않음 |
+| 손상·다른 ID/세대·오래된 상태·허용되지 않는 조합 | 어떤 상태든 | 거부: 파일 변경·정리 없음 |
+
+초기 등록의 prepared 기록에서만 previous=null과 메타데이터 없음이 허용됩니다.
+원래 활성본은 초기 등록 중 쓰지 않고 바이트·품질·mtime 출처를 유지합니다.
+초기 등록 복구는 원본을 유지하며 미완료 메타데이터를 제거한 뒤 재등록할 수 있습니다.
+committed 기록과 변경 전 표식의 혼합은 같은 ID·세대라도 거부합니다.
+
+prepared 복구는 이전 보관본 전체를 검증하고 활성 파일·이전 메타데이터를 다시 저장합니다.
+committed 복구는 다음 보관본 전체를 검증하고 활성 파일·다음 대기 메타데이터를 다시 저장합니다.
+내용이 같아도 이전 fsync 실패 가능성이 있으므로 쓰기를 생략하지 않습니다.
+이 두 저장이 완료되기 전에는 기록을 제거하지 않습니다. 복구가 실패하거나 종료돼도 같은 기록으로 재시도합니다.
+지속 장애 중 즉시 복원을 보장할 수 없으며 새 게시·롤백·정리를 제한합니다.
+
+### 이전 형식의 전환과 전체 복원 제한
+
+형식 1 메타데이터는 정상 확정과 기록을 잃은 실패 상태를 구분할 정보가 없습니다.
+활성본과 보관 JSON의 해시가 맞고 recovery.json이 없어도 확정 완료라고 단정할 수 없습니다.
+**형식 1 메타데이터·복구 기록은 자동 변환하거나 자동 복구하지 않고 거부합니다.**
+관리되지 않은 정상 records.json만 있는 경로의 최초 등록은 형식 2로 계속 지원합니다.
+
+기존 형식 1 저장소의 읽기·게시·롤백은 새 코드에서 차단됩니다. 전환 전에 서비스를 중지하고
+원본 전체 백업·정상 확정 근거를 진단해야 합니다. 승인된 완전한 정상 상태를 새 형식으로 이관하는
+운영 전환은 별도 확인 사항이며, 이번 변경에 확정 근거를 우회하는 자동 변환기나 관리자 endpoint를 추가하지 않습니다.
+
+전체 상태가 과거의 일관된 백업으로 함께 복원되면 외부 기준 없이 그 과거 복원을 감지할 수 없습니다.
+이번 연결 검증은 확인된 기록 유실·단독 복원·혼합 ID/세대/상태를 감지하는 범위입니다.
+일관된 모든 파일을 함께 조작하는 경우나 일반 파일시스템 손상 전체를 해결한다고 주장하지 않습니다.
 
 ### 등록 4개와 실제 파일 상한 — 제안 정책, 팀장 승인 필요
 
@@ -233,69 +279,60 @@ JSON rebuild CLI는 저장소 우회를 거부합니다. 저수준 rebuild 함�
 새 관리자 API 연결 전에 초기화하면 기존 업로드가 거부되므로 ADE-50에서 전환 순서를 검증해야 합니다.
 외부 CDN/HTTP 캐시는 이번 구현에 없으며 추가 시 ADE-46/50 연결이 필요합니다.
 
-## 운영 복구 및 이전 구현 전환
+## 운영 진단·백업·복원
 
-서비스를 중지하거나 공용 잠금을 유지한 상태에서 활성 파일과 `.versions` 전체를 함께 백업합니다.
-첫 관리 조회는 모든 보관 JSON의 스키마·레코드 수·해시와 메타데이터를 검증하고 활성 파일을 복구합니다.
+불일치·기록 유실이 발견되면 쓰기 작업을 중지하고 활성 파일과 `.versions` 전체를 먼저 함께 백업합니다.
+서비스 중지 또는 공용 잠금 아래 메타데이터 형식·ID·세대·복구 필수 표식·digest와 기록·보관본을 진단합니다.
+그 후 확정 근거가 있는 일관된 전체 정상 백업을 함께 복원하는 절차를 우선합니다.
 
-```python
-store = VersionStore(configured_records_path)
-versions = store.list_versions()  # 정상 기존 파일 최초 등록 또는 복구
-payload, stat = store.read_snapshot()
-```
+**recovery.json만 삭제하거나 다른 시점의 기록만 복원하는 것을 해결책으로 사용하지 않습니다.**
+복구 필수 표식을 false로 바꾸거나 세대/ID를 수동으로 맞춰 오류를 우회하지 않습니다.
+형식 1은 별도 전환 진단이 필요하며 이 코드가 자동으로 정상 확정을 추측하지 않습니다.
 
-활성 파일만 손상·유실됐고 정상 보관본이 있으면 메타데이터에 지정된 활성 스냅샷으로 복구합니다.
-보관 JSON·메타데이터 자체가 손상됐으면 추측한 버전을 활성화하지 않고 거부합니다.
-DB에 숨겨진 payload로 복구하지 않습니다. 서비스 중지 후 일관된 정상 전체 백업을 복원해야 합니다.
-메타데이터만 지워 재초기화하는 방식은 정상 복구 절차가 아닙니다.
+형식 2의 정상 연결 상태에서 활성본만 손상·유실됐고 보관본이 정상이면 검증한 스냅샷으로 복구합니다.
+보관본·메타데이터·기록이 손상되거나 연결되지 않으면 거부합니다. 파일 하나만 지워 재초기화하지 않습니다.
+DB에 숨겨진 payload로 복원하지 않습니다. 실제 운영 환경의 권한·파일시스템·worker 전환은 ADE-50 검증 사항입니다.
 
 이전 실험 구현의 state.sqlite3가 남아 있어도 새 구현은 읽거나 열거나 삭제하지 않습니다.
 기존 DB 이력의 자동 이전은 제공하지 않습니다. 전환 전에 서비스를 중지하고
 정상 활성 JSON을 확인·백업한 뒤 초기 등록합니다. 이전 DB에만 있는 역사 복원은 별도 운영 결정이며,
 이번 변경은 실제 운영 파일이나 과거 DB를 수정하지 않았습니다.
 
-## P1/P2 회귀 검증 · 2026-10-04
+## 이번 복구 기록 연결 보완 검증 · 2026-10-04
 
-기존 독립 검토의 임시 repro.py로 P1(실패 후 새 활성본·기존 삭제·재시도 중복)과
-P2(삭제 거부 중 실제 파일 5→6→7→8)를 재현했습니다. 운영 데이터는 사용하지 않았습니다.
-새 회귀 테스트는 수정 전 Windows에서 P2 실패, Linux에서 게시/롤백 P1과 P2 3개 실패를 확인했습니다.
+기준 SHA `6277925b084e61d2e283fb39ea2789b54154296f`에서 기존 record_loss.py를 재실행해
+외부 기록 제거 후 게시 108→492·기존 삭제·재시도 동일 데이터 2개, 롤백 108→36을 확인했습니다.
+기록 유실(게시/롤백)과 과거 committed 기록 재삽입의 새 테스트 3개가 Windows/Linux 기존 코드에서 실패했습니다.
+수정 후에는 새 프로세스·기존 캐시가 있는 이용자 조회·게시·롤백 모두 거부하며,
+거부 직전 활성본·메타데이터·기록·버전 파일의 바이트가 변경되지 않는지 검증합니다.
 
-수정 후 검증 명령과 결과는 아래 표에 기록합니다. 과거 231 passed를 새 검증으로 재사용하지 않습니다.
-소스는 임시 checkout으로 복사하고 pytest basetemp와 E2E test-results도 저장소 밖에 생성합니다.
-Linux 소스와 합성 데이터는 WSL Ubuntu ext4에 있습니다.
+새 회귀는 ID·세대·불변 의도 digest·메타데이터/phase 조합 불일치, 손상 JSON,
+형식 1의 자동 전환 거부, 표식/대기 상태 저장 전후·기록 삭제 후의 Linux SIGKILL 10개,
+표식과 최종 대기 저장의 게시/롤백 연속 장애 4개를 포함합니다.
+기존 fsync 테스트는 새 표식 쓰기가 아니라 **활성 ID가 변경된 다음 메타데이터 교체**를 대상으로
+주입하도록 유지했습니다. 기존 복구 재실패·반복 SIGKILL·정리 실패 상한·초기 등록·통계·예측도 실행합니다.
+
+합성 데이터만 저장소 밖 임시 checkout과 pytest basetemp/E2E test-results에 생성했습니다.
+Windows: `C:\Users\user\AppData\Local\Temp\ade45-identity-validation-txhm8ihb\windows`.
+Linux: WSL Ubuntu ext4 `/home/psy/ade45-identity-g63ACV`.
+각 플랫폼의 기존 가상환경을 사용합니다. Linux는 `/home/psy/ade45-linux-20261003-e9oKAZ/.venv`입니다.
 
 ```text
-python -B -m pytest tests/test_versions.py tests/test_versions_migration.py tests/test_versions_process_recovery.py tests/test_versions_json.py tests/test_versions_durable.py -q -p no:cacheprovider --basetemp <temporary-path>
+python -B -m pytest tests/test_versions.py tests/test_versions_migration.py tests/test_versions_process_recovery.py tests/test_versions_json.py tests/test_versions_durable.py tests/test_versions_identity.py -q -p no:cacheprovider --basetemp <temporary-path>
 python -B -m pytest -q -p no:cacheprovider --basetemp <temporary-path>
 python -B -m scripts.e2e
 python -B -m scripts.e2e_present
 git diff --check
 ```
 
-| 환경 | 관련 pytest | 전체 pytest | e2e / e2e_present |
-| --- | --- | --- | --- |
-| Windows Python 3.12.14 | 53 passed, 21 skipped | 227 passed, 21 skipped | PASS / PASS |
-| WSL Ubuntu Python 3.12.3, ext4 | 74 passed | 248 passed | PASS / PASS |
+| 직접 실행 환경 | 관련 pytest | 전체 pytest | scripts.e2e | scripts.e2e_present |
+| --- | --- | --- | --- | --- |
+| Windows Python 3.12.14 | 71 passed / 31 skipped | 245 passed / 31 skipped | PASS | PASS |
+| WSL Ubuntu Python 3.12.3, ext4 | 102 passed | 276 passed | PASS | PASS |
 
-모든 실행은 0 failed입니다. 전체 pytest의 기존 Starlette/httpx deprecation 경고 1개는 남아 있습니다.
-Windows 임시 checkout: `C:\Users\user\AppData\Local\Temp\ade45-fix-validation-dt68z0zg\windows`.
-Linux 임시 checkout: `/home/psy/ade45-fix-snrYL6`.
-Windows 기존 `.venv` 및 Linux 전용 `/home/psy/ade45-linux-20261003-e9oKAZ/.venv`를 각각 사용했습니다.
-운영 경로를 실행 대상으로 사용하지 않았으며 테스트한 Python 소스의 해시를 로컬 변경과 대조했습니다.
-Linux SIGKILL은 최초 등록 3개, 게시/롤백 경계 10개, 반복 복구 경계 6개로 총 19개 시나리오입니다.
-반복 복구 6개는 각각 두 번 종료하므로 실제 SIGKILL 실행은 총 25회입니다.
-최종 확정 파일의 fsync와 후속 읽기가 함께 실패해도 교체 완료 여부를 AtomicWriteError에 유지해
-성공한 게시를 실패로 잘못 반환하지 않는 경우도 검증합니다.
-`git diff --check` 통과. GitHub CI 결과는 PR 본문에 별도로 기록합니다.
-
-연속 metadata rename/fsync + 복원 fsync 장애, 장애 중 조회/후속 변경 제한,
-장애 해제 후 새 프로세스의 이전 파일/목록/API 통계·패턴·예측 복구와 기존 4개 보존,
-실패 요청 재시도 후 동일 payload 정상 버전 1개를 검증합니다.
-복구 도중 active/metadata/복구 기록 제거 직전에서 게시·롤백 각각 worker를 두 번 SIGKILL하고
-새 프로세스 복구를 확인합니다. 최종 decision 교체 이후 fsync 실패는 성공 판정·정리 보류를 검증합니다.
-지속 삭제 장애 중 4회 추가 업로드 거부·실제 파일 5개 유지·조회/롤백 유지와 장애 해제 후 정리/게시,
-최초 등록 연속 장애·원본 보존·중복 방지, recovery만 존재할 때 기존 JSON/CLI/refresh 우회 차단을 검증합니다.
-기존 초기 등록·4세대 순환·동시 요청·SQLite 차단·OpenAPI 성공 응답과 이용자 API 회귀도 실행합니다.
+마지막 코드 변경 후 두 환경에서 모두 다시 실행했습니다. Windows skips는 Linux 전용
+fsync/SIGKILL 검증이며 Linux에서 실행했습니다. Starlette/httpx 사용 중단 예정 경고 1개가 남습니다.
+기존 248 passed 결과를 새 검증으로 사용하지 않았습니다. GitHub CI 결과는 PR 본문에 별도로 기록합니다.
 
 ## 남은 의존성과 미검증 환경
 
@@ -303,7 +340,4 @@ ADE-44 검증 계약·공통 fixture 확정 후 공용 전처리 대조, ADE-43/
 응답 명시, ADE-46 세션·관리자 API 연결, ADE-50 실제 PythonAnywhere worker·파일시스템·운영 데이터/API·
 전체 웹 통합 검증이 남아 있습니다. 실제 전원 장애·영구 디스크 손상·분산 파일시스템은 미검증입니다.
 WSL ext4의 SIGKILL 복구 결과를 PythonAnywhere 운영 검증으로 해석하지 않습니다.
-PR Draft와 Linear In Progress를 유지하며 이 작업에서 병합·배포하지 않습니다.
-
-최초 등록의 최종 확정 후 디렉터리 fsync가 계속 실패하면, 같은 호출의 후속 업로드 전에
-복구를 재시도합니다. 기존 초기 등록 기록을 새 게시 의도로 덮어쓰지 않는 추가 회귀도 통과했습니다.
+PR Draft를 유지하며 Linear 변경·병합·배포하지 않습니다.
