@@ -45,7 +45,7 @@ def main():
         report={'record_count':len(records),'backtest':backtest(LibraryService(records).rows)}
         json.dumps(report,allow_nan=False)
         with data_lock(args.output):
-            if (storage_directory(args.output) / 'metadata.json').exists():
+            if any((storage_directory(args.output) / name).exists() for name in ('metadata.json', 'recovery.json')):
                 raise DataError('버전 관리 데이터는 VersionStore 또는 Excel refresh로 갱신하세요.')
             rebuild(records,args.output)
     # Reports are returned on stdout; no fallible report-file write after commit.

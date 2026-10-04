@@ -51,27 +51,29 @@ if stage == 'rebuild':
         pause()
         return rebuild(records, destination)
     store.rebuild_fn = prepare
-elif stage in ('version', 'active', 'metadata', 'rollback_metadata'):
+elif stage in ('version', 'active', 'metadata', 'rollback_metadata', 'decision', 'rollback_decision'):
     real_replace = module.os.replace
     def replace(source, destination):
         real_replace(source, destination)
         dest = Path(destination)
         if ((stage == 'active' and dest == path)
-                or (stage == 'version' and dest.parent == store.directory and dest.name != 'metadata.json')
-                or (stage in ('metadata', 'rollback_metadata') and dest == store.metadata)):
+                or (stage == 'version' and dest.parent == store.directory and module.VERSION_ID.fullmatch(dest.stem))
+                or (stage in ('metadata', 'rollback_metadata') and dest == store.metadata)
+                or (stage in ('decision', 'rollback_decision') and dest == store.recovery
+                    and module.json.loads(dest.read_bytes())['phase'] == 'committed')):
             pause()
     module.os.replace = replace
 elif stage == 'prune':
     real_unlink = Path.unlink
     def unlink(candidate, *args, **kwargs):
         real_unlink(candidate, *args, **kwargs)
-        if candidate.parent == store.directory and candidate.suffix == '.json':
+        if candidate.parent == store.directory and module.VERSION_ID.fullmatch(candidate.stem):
             pause()
     Path.unlink = unlink
 else:
     real_commit = store._commit
     store._commit = lambda state: pause() or real_commit(state)
-if stage in ('rollback_commit', 'rollback_metadata'):
+if stage in ('rollback_commit', 'rollback_metadata', 'rollback_decision'):
     store.rollback(target)
 else:
     store.upload_excel(source, partial_dates=[])
@@ -79,7 +81,7 @@ else:
 
 
 @pytest.mark.skipif(os.name != 'posix', reason='POSIX SIGKILL/flock verification on Linux')
-@pytest.mark.parametrize('stage', ['rebuild', 'version', 'active', 'prune', 'commit', 'metadata', 'rollback_commit', 'rollback_metadata'])
+@pytest.mark.parametrize('stage', ['rebuild', 'version', 'active', 'prune', 'commit', 'metadata', 'rollback_commit', 'rollback_metadata', 'decision', 'rollback_decision'])
 def test_sigkill_worker_and_fresh_process_api_recovery(tmp_path, stage):
     path = tmp_path / 'records.json'
     store = VersionStore(path)
@@ -91,8 +93,8 @@ def test_sigkill_worker_and_fresh_process_api_recovery(tmp_path, stage):
     from library_etl.pipeline import preprocess
     from library_etl.refresh import merge_records
     from scripts.rebuild import rebuild
-    if stage in ('prune', 'metadata', 'rollback_metadata'):
-        if stage == 'rollback_metadata':
+    if stage in ('prune', 'decision', 'rollback_decision'):
+        if stage == 'rollback_decision':
             expected_records = json.loads((store.directory / (ids[0] + '.json')).read_bytes())
         else:
             incoming, _ = preprocess(source, partial_dates=[])
@@ -132,16 +134,16 @@ print(json.dumps(summary(Path(sys.argv[1]))))
     assert fresh.returncode == 0, fresh.stderr
     recovered = json.loads(fresh.stdout)
     versions = store.list_versions()
-    if stage in ('prune', 'metadata'):
+    if stage in ('prune', 'decision'):
         assert versions['active_version_id'] not in ids
         assert recovered['stats']['hourly_total_in'] == 12 * 41
-    elif stage == 'rollback_metadata':
+    elif stage == 'rollback_decision':
         assert versions['active_version_id'] == ids[0]
         assert recovered['stats']['hourly_total_in'] == 12 * 3
     else:
         assert recovered == before
         assert versions['active_version_id'] == ids[-1]
-    if stage in ('prune', 'metadata', 'rollback_metadata'):
+    if stage in ('prune', 'decision', 'rollback_decision'):
         for key in ('active_hash', 'stats', 'forecast', 'patterns'):
             assert recovered[key] == expected[key]
     assert sum(v['is_active'] for v in versions['versions']) == 1

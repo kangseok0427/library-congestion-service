@@ -189,7 +189,7 @@ else:
         real(source, destination)
         dest = Path(destination)
         if ((stage == 'metadata' and dest == store.metadata)
-                or (stage == 'version' and dest.parent == store.directory and dest.suffix == '.json')):
+                or (stage == 'version' and dest.parent == store.directory and module.VERSION_ID.fullmatch(dest.stem))):
             pause()
     module.os.replace = replace
 store.list_versions()

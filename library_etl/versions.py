@@ -29,10 +29,18 @@ class VersionError(DataError):
         return {'error': {'code': self.code, 'message': str(self), 'details': self.details}}
 
 
+class AtomicWriteError(OSError):
+    """A write error with an explicit indication that replacement completed."""
+    def __init__(self, cause, *, replaced):
+        super().__init__(str(cause))
+        self.replaced = replaced
+
+
 def atomic_bytes(path, payload, *, records=True):
     """Complete and fsync a same-filesystem temporary file, then replace."""
     fd, name = tempfile.mkstemp(prefix=f'.{path.name}.staged-', dir=path.parent)
     staged = Path(name)
+    replaced = False
     try:
         with os.fdopen(fd, 'wb') as stream:
             stream.write(payload)
@@ -42,14 +50,20 @@ def atomic_bytes(path, payload, *, records=True):
         if records:
             validate_records(value)
         os.replace(staged, path)
+        replaced = True
         if os.name != 'nt':
             directory_fd = os.open(path.parent, os.O_RDONLY)
             try:
                 os.fsync(directory_fd)
             finally:
                 os.close(directory_fd)
+    except OSError as exc:
+        raise AtomicWriteError(exc, replaced=replaced) from exc
     finally:
-        staged.unlink(missing_ok=True)
+        try:
+            staged.unlink(missing_ok=True)
+        except OSError as exc:
+            raise AtomicWriteError(exc, replaced=replaced) from exc
 
 
 def encoded(value):
@@ -64,16 +78,16 @@ def normal_records(payload):
 
 
 class VersionStore:
-    """Immutable version JSON and metadata.json are the committed state.
+    """JSON snapshots with a replayable prepared/committed decision record.
 
-    Under the shared OS lock: snapshot -> live file -> metadata commit -> cleanup.
-    Until metadata replacement, recovery restores the previous active snapshot.
-    Pruning never deletes a committed snapshot before the new commit succeeds.
+    Metadata replacement alone is not commitment. Every access uses the OS lock;
+    pending recovery is replayed before serving data, mutating or pruning.
     """
     def __init__(self, path, *, rebuild_fn=rebuild):
         self.path = Path(path).resolve()
         self.directory = storage_directory(self.path)
         self.metadata = self.directory / 'metadata.json'
+        self.recovery = self.directory / 'recovery.json'
         self.rebuild_fn = rebuild_fn
 
     def _new_row(self, payload, source_name, state, stamp=None):
@@ -90,6 +104,9 @@ class VersionStore:
         if self.metadata.exists():
             return self._load_state()
         state = dict(format_version=1, active_version_id=None, versions=[])
+        self._require_clean(state)
+        payload = None
+        row = None
         if self.path.exists():
             payload = self.path.read_bytes()
             previous = normal_records(payload)
@@ -100,14 +117,15 @@ class VersionStore:
             row = self._new_row(payload, source, state, stamp)
             # Existing source name is provenance, not an invented upload event.
             row['created_at'] = stamp.isoformat()
-            atomic_bytes(self.directory / (row['id'] + '.json'), payload)
             state.update(active_version_id=row['id'], versions=[row])
         # An empty internal state permits first upload but is never a successful list.
-        atomic_bytes(self.metadata, encoded(state), records=False)
+        self._activate(None, state, payload, row, initialize=True)
         return state
 
     def _load_state(self):
-        state = json.loads(self.metadata.read_bytes())
+        return self._validate_state(json.loads(self.metadata.read_bytes()))
+
+    def _validate_state(self, state):
         if (not isinstance(state, dict) or set(state) != {'format_version', 'active_version_id', 'versions'}
                 or state['format_version'] != 1 or not isinstance(state['versions'], list)
                 or len(state['versions']) > MAX_VERSIONS):
@@ -157,6 +175,8 @@ class VersionStore:
     def _cleanup(self, state):
         """Post-commit garbage collection. Failure cannot turn success into failure."""
         try:
+            if self.recovery.exists():
+                return
             self._collect_garbage(state)
         except OSError:
             # Directory enumeration can fail just like unlink; retry next time.
@@ -180,6 +200,7 @@ class VersionStore:
     def _run(self, operation, *, wait=False):
         try:
             with data_lock(self.path, wait=wait):
+                self._recover_transaction()
                 state = self._initialize()
                 self._recover(state)
                 return operation(state)
@@ -196,20 +217,96 @@ class VersionStore:
     def _commit(self, state):
         atomic_bytes(self.metadata, encoded(state), records=False)
 
-    def _activate(self, previous, state, payload, row=None):
+    def _require_clean(self, state):
+        """Remove existing orphans before allocating another candidate snapshot."""
+        self._collect_garbage(state)
+        retained = {r['id'] + '.json' for r in state['versions']}
+        # scandir propagates enumeration errors; glob may silently hide them.
+        with os.scandir(self.directory) as entries:
+            orphan = any(p.name.endswith('.json') and VERSION_ID.fullmatch(p.name[:-5])
+                         and p.name not in retained for p in entries)
+        if orphan:
+            raise VersionError('이전 버전 정리가 완료되지 않았습니다.', 'PUBLISH_FAILED', 500)
+
+    def _sync_directory(self):
+        if os.name != 'nt':
+            fd = os.open(self.directory, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+
+    def _recover_transaction(self):
+        if not self.recovery.exists():
+            return
+        record = json.loads(self.recovery.read_bytes())
+        if (not isinstance(record, dict)
+                or set(record) != {'format_version', 'phase', 'initialize', 'previous', 'next'}
+                or record['format_version'] != 1
+                or record['phase'] not in ('prepared', 'committed')
+                or type(record['initialize']) is not bool
+                or (record['previous'] is None) != record['initialize']):
+            raise DataError('복구 기록이 손상되었습니다.')
+        self._validate_state(record['next'])
+        if record['previous'] is not None:
+            self._validate_state(record['previous'])
+        state = record['next'] if record['phase'] == 'committed' else record['previous']
+        if state is None:
+            # Initial registration never writes the original live file.
+            self.metadata.unlink(missing_ok=True)
+            self._sync_directory()
+        else:
+            payloads = {r['id']: self._payload(r) for r in state['versions']}
+            active = state['active_version_id']
+            if active is None:
+                self.path.unlink(missing_ok=True)
+            else:
+                # Equal bytes do not prove durability after an earlier fsync failure.
+                atomic_bytes(self.path, payloads[active])
+            self._commit(state)
+        # Keep the decision replayable until both files have been restored.
+        self._finish_transaction()
+
+    def _finish_transaction(self):
+        self.recovery.unlink()
+        self._sync_directory()
+
+    def _decision(self, record):
+        committed = {**record, 'phase': 'committed'}
         try:
+            atomic_bytes(self.recovery, encoded(committed), records=False)
+        except OSError as exc:
+            # Replace may have succeeded before directory fsync failed. A visible
+            # final decision cannot subsequently be reported as a failed publish.
+            replaced = isinstance(exc, AtomicWriteError) and exc.replaced
+            if not replaced and self.recovery.read_bytes() != encoded(committed):
+                raise
+            return False  # Retain record; retry durability before further work.
+        return True
+
+    def _activate(self, previous, state, payload, row=None, *, initialize=False):
+        record = dict(format_version=1, phase='prepared', initialize=initialize,
+                      previous=previous, next=state)
+        try:
+            atomic_bytes(self.recovery, encoded(record), records=False)
             if row is not None:
                 atomic_bytes(self.directory / (row['id'] + '.json'), payload)
-            atomic_bytes(self.path, payload)
+            if not initialize:
+                atomic_bytes(self.path, payload)
             self._commit(state)
+            finalized = self._decision(record)
         except BaseException:
-            # Even an exception after metadata rename must not return failure with
-            # the new state active. If disk errors persist, next read uses old metadata.
-            if self.metadata.read_bytes() != encoded(previous):
-                atomic_bytes(self.metadata, encoded(previous), records=False)
-            self._recover(previous)
+            self._recover_transaction()
+            if previous is not None:
+                self._cleanup(previous)
             raise
-        self._cleanup(state)
+        if finalized:
+            try:
+                self._finish_transaction()
+            except OSError:
+                # Already committed: cleanup/recovery failure cannot return 500.
+                return
+            self._cleanup(state)
 
     def read_snapshot(self):
         # Preserve legacy unversioned operation until a version-management call.
@@ -219,6 +316,7 @@ class VersionStore:
             with self.path.open('rb') as stream:
                 return stream.read(), os.fstat(stream.fileno())
         with data_lock(self.path, wait=True):
+            self._recover_transaction()
             if self.metadata.exists():
                 state = self._load_state()
                 self._recover(state)
@@ -244,6 +342,7 @@ class VersionStore:
                 'is_active': row['id'] == active}
 
     def _publish(self, previous, records, source_name):
+        self._require_clean(previous)
         payload = self._prepared(records)
         row = self._new_row(payload, source_name, previous)
         state = dict(format_version=1, active_version_id=row['id'],
