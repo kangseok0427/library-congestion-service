@@ -48,7 +48,7 @@ def test_publish_rotate_restart_and_rollback_api(store, tmp_path):
         assert body['hourly_total_in'] == 12 * (2 * value + 1)
         api.append(body)
         assert len(store.list_versions()['versions']) == min(value, 4)
-        assert len(list(store.directory.glob('*.json'))) == min(value, 4)
+        assert len(list(store.directory.glob('*.json'))) == min(value, 4) + 1
     versions = store.list_versions()
     assert [v['id'] for v in versions['versions']] == ids[:0:-1]
     assert not (store.directory / (ids[0] + '.json')).exists()
@@ -99,7 +99,7 @@ def test_other_invalid_workbooks(store, tmp_path, kind):
     assert persisted(store) == before
 
 
-@pytest.mark.parametrize('stage', ['rebuild', 'stage', 'version', 'active', 'prune', 'commit'])
+@pytest.mark.parametrize('stage', ['rebuild', 'stage', 'version', 'active', 'commit'])
 def test_failures_restore_all_four_versions(store, tmp_path, monkeypatch, stage):
     import library_etl.versions as module
     for value in range(4):
@@ -122,16 +122,6 @@ def test_failures_restore_all_four_versions(store, tmp_path, monkeypatch, stage)
                     raise OSError('injected replace')
                 return original(source, destination)
             patch.setattr(module.os, 'replace', replace)
-        if stage == 'prune':
-            original = Path.unlink
-            failed = False
-            def unlink(path, *args, **kwargs):
-                nonlocal failed
-                if path.parent == store.directory and path.suffix == '.json' and not failed:
-                    failed = True
-                    raise OSError('prune')
-                return original(path, *args, **kwargs)
-            patch.setattr(Path, 'unlink', unlink)
         if stage == 'commit':
             patch.setattr(store, '_commit', lambda *args: (_ for _ in ()).throw(OSError('commit')))
         with pytest.raises(VersionError) as caught:
@@ -140,7 +130,7 @@ def test_failures_restore_all_four_versions(store, tmp_path, monkeypatch, stage)
     assert persisted(store) == before
 
 
-def test_killed_worker_after_prune_recovers_on_actual_api_read(store, tmp_path):
+def test_killed_worker_before_commit_recovers_on_actual_api_read(store, tmp_path):
     for value in range(4):
         upload(store, tmp_path, value)
     before = persisted(store)
@@ -149,13 +139,13 @@ def test_killed_worker_after_prune_recovers_on_actual_api_read(store, tmp_path):
 import os, sys
 from library_etl.versions import VersionStore
 class CrashingStore(VersionStore):
-    def _commit(self, connection):
+    def _commit(self, state):
         os._exit(19)
 CrashingStore(sys.argv[1]).upload_excel(sys.argv[2], partial_dates=[])
 '''
     result = subprocess.run([sys.executable, '-c', code, str(store.path), str(source)], timeout=30)
     assert result.returncode == 19
-    assert store.path.read_bytes() != before[0]  # Killed after replacement and pruning.
+    assert store.path.read_bytes() != before[0]  # Killed after replacement, before metadata commit.
     client = TestClient(create_app(FileProvider(store.path),
                        clock=lambda: datetime(2026, 9, 10, 12, tzinfo=KST)))
     assert client.get('/api/v1/stats?date=2026-09-10').status_code == 200
@@ -178,6 +168,7 @@ with data_lock(sys.argv[1]):
     try:
         assert worker.stdout.readline().strip() == 'locked'
         for operation in [lambda: upload(store, tmp_path), lambda: store.rollback(version_id),
+                          lambda: store.list_versions(),
                           lambda: refresh(excel(tmp_path / 'cli.xlsx'), store.path, partial_dates=[])]:
             with pytest.raises(VersionError) as caught:
                 operation()
@@ -204,6 +195,10 @@ def test_actual_concurrent_upload_and_rollback(store, tmp_path):
         assert entered.wait(10)
         with pytest.raises(VersionError) as caught:
             VersionStore(store.path).rollback(version_id)
+        assert caught.value.code == 'PUBLISH_IN_PROGRESS'
+        contender = excel(tmp_path / 'contender.xlsx', value=30)
+        with pytest.raises(VersionError) as caught:
+            VersionStore(store.path).upload_excel(contender, partial_dates=[])
         assert caught.value.code == 'PUBLISH_IN_PROGRESS'
     finally:
         release.set()
@@ -248,7 +243,8 @@ def test_original_name_never_becomes_a_storage_path(store, tmp_path):
     assert not store.path.exists()
 
 
-def test_results_match_existing_v2_contract(store, tmp_path):
+@pytest.mark.parametrize('initial', [False, True])
+def test_results_match_existing_v2_contract(store, tmp_path, initial):
     contract = yaml.safe_load(Path('contracts/openapi-v2.yaml').read_text(encoding='utf-8'))
     schemas = contract['components']['schemas']
     def validate(value, schema):
@@ -281,6 +277,12 @@ def test_results_match_existing_v2_contract(store, tmp_path):
             assert type(value) is int and value >= schema.get('minimum', value)
         if kind == 'boolean':
             assert type(value) is bool
+    if initial:
+        from datetime import date
+        from scripts.rebuild import rebuild
+        from scripts.sample import generate
+        rebuild(generate(end=date(2026, 9, 10), days=2), store.path)
+        validate(store.list_versions(), schemas['VersionList'])
     published = upload(store, tmp_path)
     for value, schema in [(published, 'UploadPublished'), (store.list_versions(), 'VersionList'),
                           (store.rollback(published['version']['id']), 'RollbackResult')]:

@@ -51,11 +51,14 @@ if stage == 'rebuild':
         pause()
         return rebuild(records, destination)
     store.rebuild_fn = prepare
-elif stage == 'active':
+elif stage in ('version', 'active', 'metadata', 'rollback_metadata'):
     real_replace = module.os.replace
     def replace(source, destination):
         real_replace(source, destination)
-        if Path(destination) == path:
+        dest = Path(destination)
+        if ((stage == 'active' and dest == path)
+                or (stage == 'version' and dest.parent == store.directory and dest.name != 'metadata.json')
+                or (stage in ('metadata', 'rollback_metadata') and dest == store.metadata)):
             pause()
     module.os.replace = replace
 elif stage == 'prune':
@@ -66,8 +69,9 @@ elif stage == 'prune':
             pause()
     Path.unlink = unlink
 else:
-    store._commit = lambda connection: pause() or connection.commit()
-if stage == 'rollback_commit':
+    real_commit = store._commit
+    store._commit = lambda state: pause() or real_commit(state)
+if stage in ('rollback_commit', 'rollback_metadata'):
     store.rollback(target)
 else:
     store.upload_excel(source, partial_dates=[])
@@ -75,13 +79,27 @@ else:
 
 
 @pytest.mark.skipif(os.name != 'posix', reason='POSIX SIGKILL/flock verification on Linux')
-@pytest.mark.parametrize('stage', ['rebuild', 'active', 'prune', 'commit', 'rollback_commit'])
+@pytest.mark.parametrize('stage', ['rebuild', 'version', 'active', 'prune', 'commit', 'metadata', 'rollback_commit', 'rollback_metadata'])
 def test_sigkill_worker_and_fresh_process_api_recovery(tmp_path, stage):
     path = tmp_path / 'records.json'
     store = VersionStore(path)
     ids = [upload(store, tmp_path, value)['version']['id'] for value in range(1, 5)]
     before = summary(path)
     source = excel(tmp_path / 'worker.xlsx', value=20)
+    # Compute the expected visitor results from a normal, uninterrupted rebuild
+    # before killing the worker; repeated reads of the recovered file are not enough.
+    from library_etl.pipeline import preprocess
+    from library_etl.refresh import merge_records
+    from scripts.rebuild import rebuild
+    if stage in ('prune', 'metadata', 'rollback_metadata'):
+        if stage == 'rollback_metadata':
+            expected_records = json.loads((store.directory / (ids[0] + '.json')).read_bytes())
+        else:
+            incoming, _ = preprocess(source, partial_dates=[])
+            expected_records = merge_records(json.loads(path.read_bytes()), incoming)
+        expected_path = tmp_path / 'expected.json'
+        rebuild(expected_records, expected_path)
+        expected = summary(expected_path)
     worker = subprocess.Popen([sys.executable, '-c', WORKER, str(path), str(source), stage, ids[0]],
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True)
@@ -112,11 +130,22 @@ print(json.dumps(summary(Path(sys.argv[1]))))
     fresh = subprocess.run([sys.executable, '-c', code, str(path)],
                            capture_output=True, text=True, timeout=30)
     assert fresh.returncode == 0, fresh.stderr
-    assert json.loads(fresh.stdout) == before
+    recovered = json.loads(fresh.stdout)
     versions = store.list_versions()
-    assert versions['active_version_id'] == ids[-1]
+    if stage in ('prune', 'metadata'):
+        assert versions['active_version_id'] not in ids
+        assert recovered['stats']['hourly_total_in'] == 12 * 41
+    elif stage == 'rollback_metadata':
+        assert versions['active_version_id'] == ids[0]
+        assert recovered['stats']['hourly_total_in'] == 12 * 3
+    else:
+        assert recovered == before
+        assert versions['active_version_id'] == ids[-1]
+    if stage in ('prune', 'metadata', 'rollback_metadata'):
+        for key in ('active_hash', 'stats', 'forecast', 'patterns'):
+            assert recovered[key] == expected[key]
     assert sum(v['is_active'] for v in versions['versions']) == 1
     assert {v['id'] + '.json' for v in versions['versions']} == {
-        p.name for p in store.directory.glob('*.json')}
+        p.name for p in store.directory.glob('*.json') if p.name != 'metadata.json'}
     upload(store, tmp_path, 21)  # SIGKILL did not leave a stale lock.
     assert len(store.list_versions()['versions']) == 4

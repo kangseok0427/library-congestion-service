@@ -36,7 +36,7 @@ def refresh(source, destination, *, rebuild_fn=None, **options):
         from scripts.rebuild import rebuild
         rebuild_fn = rebuild
     destination = Path(destination).resolve()
-    if (storage_directory(destination) / 'state.sqlite3').exists():
+    if (storage_directory(destination) / 'metadata.json').exists():
         from .versions import VersionStore
         return VersionStore(destination, rebuild_fn=rebuild_fn).upload_excel(source, **options)
     stage = 'preprocess'
@@ -44,7 +44,7 @@ def refresh(source, destination, *, rebuild_fn=None, **options):
         incoming, report = preprocess(source, **options)
         destination.parent.mkdir(parents=True, exist_ok=True)
         with writer_lock(destination, report):
-            if (storage_directory(destination) / 'state.sqlite3').exists():
+            if (storage_directory(destination) / 'metadata.json').exists():
                 raise DataError('버전 저장소가 초기화됐습니다. 갱신을 다시 요청하세요.', 'PUBLISH_IN_PROGRESS')
             stage = 'merge'
             existing = read_records(destination) if destination.exists() else []

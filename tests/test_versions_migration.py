@@ -46,7 +46,7 @@ def test_first_publication_crash_keeps_existing_snapshot(tmp_path):
 import os, sys
 from library_etl.versions import VersionStore
 class Crash(VersionStore):
-    def _commit(self, connection):
+    def _commit(self, state):
         os._exit(19)
 Crash(sys.argv[1]).upload_excel(sys.argv[2], partial_dates=[])
 '''
@@ -55,29 +55,40 @@ Crash(sys.argv[1]).upload_excel(sys.argv[2], partial_dates=[])
     store = VersionStore(path)
     payload, _ = store.read_snapshot()
     assert payload == original
-    assert store.list_versions()['versions'] == []
-    assert not list(store.directory.glob('*.json'))
+    versions = store.list_versions()
+    assert len(versions['versions']) == 1
+    assert versions['active_version_id'] == versions['versions'][0]['id']
+    assert len(list(store.directory.glob('*.json'))) == 2
 
 
-def test_corrupt_retained_json_is_recovered_from_committed_payload(tmp_path):
-    store = VersionStore(tmp_path / 'records.json')
-    version = upload(store, tmp_path)['version']['id']
-    before = persisted(store)
-    (store.directory / (version + '.json')).write_bytes(b'broken')
-    store.rollback(version)
-    assert persisted(store) == before
-
-
-def test_corrupt_authority_is_rejected_without_activating_it(tmp_path):
-    import sqlite3
+@pytest.mark.parametrize('damage', ['invalid_json', 'valid_but_changed', 'missing'])
+def test_corrupt_retained_json_is_rejected_without_changing_active(tmp_path, damage):
     store = VersionStore(tmp_path / 'records.json')
     first = upload(store, tmp_path)['version']['id']
     upload(store, tmp_path, 8)
     before = store.path.read_bytes()
-    with sqlite3.connect(store.database) as connection:
-        connection.execute('UPDATE versions SET payload=? WHERE id=?', (b'broken', first))
+    target = store.directory / (first + '.json')
+    if damage == 'missing':
+        target.unlink()
+    elif damage == 'invalid_json':
+        target.write_bytes(b'broken')
+    else:
+        rows = json.loads(target.read_bytes())
+        rows[0]['in_count'] += 1
+        target.write_text(json.dumps(rows), encoding='utf-8')
     with pytest.raises(VersionError) as caught:
         store.rollback(first)
+    assert caught.value.code == 'PUBLISH_FAILED'
+    assert store.path.read_bytes() == before
+
+
+def test_corrupt_metadata_is_rejected_without_activating_it(tmp_path):
+    store = VersionStore(tmp_path / 'records.json')
+    upload(store, tmp_path)
+    before = store.path.read_bytes()
+    store.metadata.write_bytes(b'broken')
+    with pytest.raises(VersionError) as caught:
+        store.list_versions()
     assert caught.value.code == 'PUBLISH_FAILED'
     assert store.path.read_bytes() == before
 

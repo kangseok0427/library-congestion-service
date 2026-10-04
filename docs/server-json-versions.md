@@ -1,28 +1,27 @@
-# ADE-45 서버 Excel 게시·4세대·롤백 인수인계
+# ADE-45 서버 Excel 게시·JSON 4세대·롤백 인수인계
 
-작성일: 2026-10-03. 기준: 팀 `origin/develop` `95ed76e3f925ed450ded869182a904d74f185547`.
-작업 브랜치: `codex/ADE-45-server-json-versions`. PR 대상: 팀 `develop`.
-기존 `library-congestion-service`와 `library-crowding-etl` 작업 경로는 수정하지 않았습니다.
-저장소 및 상위 경로에 적용되는 AGENTS.md는 발견되지 않았습니다.
-README, Git 협업, architecture, json-refresh, verification, PythonAnywhere/Railway,
-CI와 API v2 계약·fixture를 확인했습니다.
+갱신일: 2026-10-04. 브랜치: `codex/ADE-45-server-json-versions`.
+팀 PR #20, 대상 `develop`. 작업 경로는 `C:\study\library-service-ade45`입니다.
+작업 전 HEAD와 fork 브랜치는 `46f2f2a66e7884890e21e34eac7a9de4f03e2794`,
+fetch 후 develop은 `95ed76e3f925ed450ded869182a904d74f185547`로 추가 변경이 없었습니다.
+미커밋 변경은 없었고 저장소 및 상위 경로에 AGENTS.md는 없었습니다.
+README, 협업·구조·갱신·검증·호스팅 지침, CI, OpenAPI v2와 관련 fixture를 확인했습니다.
 
-## 확인된 기준과 미확인 기준
+## 최신 리뷰와 범위
 
-초기 작업에서 Linear ADE-42/44/45/46/48, 후속 작업에서 ADE-44/46과 댓글을 읽기 전용으로 조회했습니다.
-ADE-44는 Todo이며 `docs/excel-upload-contract.md`, ADE-44 공통 검증 케이스·Excel fixture는
-원격 develop 및 조회한 팀 원격 브랜치에 없습니다. 팀 전체 PR 목록에서도 ADE-44/46
-산출물을 찾지 못했습니다. PR #18은 ADE-47 프론트·Mock 작업이며 서버 API 구현은 아닙니다.
-이슈 상태만으로 다른 저장소나 비공개 작업까지 없다고 판단하지 않습니다.
-확인한 담당자는 ADE-44 강민재, ADE-46 이가영, ADE-45 박수용입니다.
-API v2 계약은 develop에 병합돼 있으며 성공·409·422·404 결과 형식은 이를 따릅니다.
-ADE-44 미확정 사항 때문에 전체 작업 상태는 진행 중입니다. 재사용 가능한 저장 모듈과
-회귀·장애 검증은 준비됐으며 새 Excel 판정 기준을 임의로 추가하지 않았습니다.
+GitHub PR #20의 2026-10-04 팀장 Changes requested 리뷰와 Linear ADE-45 본문·댓글을
+직접 확인했습니다. JSON 전용 저장과 초기 활성본 등록 요구는 사용자 기록과 일치했습니다.
+PR은 Open/Draft이며 Draft 해제 지시는 없었습니다. ADE-45는 In Progress이고 상태를 변경하지 않습니다.
+ADE-48/PR #21은 독립 작업이며 이 브랜치에 합치지 않습니다.
 
-공용 `pipeline.preprocess`와 `refresh.merge_records`를 그대로 사용합니다. 필수 열·시트,
-빈값·음수·소수·수식·날짜·중복 오류, 합계 불일치 경고, 완료→partial 거부는 기존 기준입니다.
-원본 08~23시와 OUT_11 값을 보존하며 운영시간 필터는 기존 백엔드 정책을 따릅니다.
-ADE-44 담당자의 승인이나 새 운영 기준 확정이라고 해석하지 않습니다.
+2026-10-04 조회에서 ADE-44·46·50은 Todo입니다. ADE-44·46 댓글·첨부 문서는 없으며,
+최신 develop과 로컬 저장소에 `docs/excel-upload-contract.md` 및 ADE-44 공통 Excel fixture는
+아직 없습니다. 팀 PR 목록에서도 해당 산출물을 찾지 못했습니다. 다른 비공개 작업의 부재를 뜻하지 않습니다.
+
+공용 `pipeline.preprocess`와 `refresh.merge_records`를 재사용합니다. 필수 열·시트,
+빈값·음수·소수·수식·날짜·중복 오류, 합계 불일치 경고, 완료→partial 거부는 기존 기준을 유지합니다.
+원본 08~23시, OUT_11, 선택 품질 정보를 보존합니다. ADE-44의 새 승인 기준을 확정한 결과는 아닙니다.
+관리자 인증·FastAPI endpoint·화면은 ADE-46 범위로 새로 구현하지 않습니다.
 
 ## ADE-46 호출 인터페이스
 
@@ -74,7 +73,7 @@ ADE-46에서 미리 변환하거나 JSON 순환 저장을 중복 구현할 필�
 
 ### 동기 작업과 FastAPI 연결 예시
 
-Excel 파싱, 전체 이력 읽기·병합, 모든 날짜의 통계·예측 검증, JSON/SQLite 기록과 fsync는
+Excel 파싱, 전체 이력 읽기·병합, 모든 날짜의 통계·예측 검증, JSON 기록과 fsync는
 모두 동기 작업입니다. 파일 크기와 기록 기간에 따라 CPU·메모리·디스크 비용이 늘고, 잠금은
 병합·재계산·저장 전체 동안 유지됩니다. 일정한 응답시간을 보장하지 않습니다.
 기존 FastAPI의 `async def`에서 직접 호출하면 이벤트 루프를 막으므로 Starlette의
@@ -120,156 +119,173 @@ API 계층에서 확인해야 합니다. store는 자체 JSON staging만 정리�
 | upload_excel | `status=published`, DataVersion, ValidationSummary | INVALID_EXCEL 422, PUBLISH_IN_PROGRESS 409 |
 | list_versions | `versions`, `active_version_id`, `max_versions=4` | 변경 중이면 PUBLISH_IN_PROGRESS 409 |
 | rollback | `status=rolled_back`, `active_version_id` | VERSION_NOT_FOUND 404, PUBLISH_IN_PROGRESS 409 |
-| 저장·복구 공통 | 성공한 SQLite 커밋 상태 유지 | PUBLISH_FAILED 500 (아래 제안 사항) |
+| 저장·복구 공통 | 성공한 JSON 메타데이터 커밋 상태 유지 | PUBLISH_FAILED 500 (아래 제안 사항) |
 
 `VersionError.as_dict()`는 `{error: {code, message, details}}`입니다.
 행별 오류의 `message`는 v2 `reason`으로 변환합니다. 경고는 `code/message/row`로 반환하고
 세부 원본 합계 숫자는 표준 응답에 추가하지 않습니다. `record_count`는 이력 병합 후 전체 스냅샷 개수입니다.
 
-### 공통 계약이 없는 항목: 제안
+### 승인된 계약과 내부 오류의 구분
 
-- 저장/재계산/복구 실패 `PUBLISH_FAILED`, HTTP 500의 명시는 API v2에 아직 없습니다. ADE-43/46에서 승인·반영해야 합니다.
-- 첫 게시 전 빈 목록은 내부적으로 `versions=[]`, `active_version_id=None`입니다.
-  현재 v2는 활성 id를 문자열로만 정의하므로 이 상태를 200으로 그대로 내보내면 계약 위반입니다.
-  ADE-43/46에서 nullable 또는 별도 초기 상태 오류를 결정해야 합니다.
-- 목록이 변경 잠금과 충돌하는 경우의 409도 목록 endpoint 계약에 추가할지 확인해야 합니다.
-- 같은 초에 게시가 반복되면 v2의 초 단위 ID 형식을 유지하기 위해 논리 시각을 1초 증가시킵니다.
-  `created_at`에는 실제 KST 생성시각을 기록합니다. ID는 생성시각 자체로 해석하지 않습니다.
-- 최초 성공 게시 시 기존 정상 JSON도 한 보관 버전으로 등록합니다. 이전 파일의 생성시각을
-  알 수 없어 파일 mtime을 사용하고, 단일 `source_file`이면 그 값을 사용합니다.
-  여러 원본이 섞인 경우 메타데이터에는 기존 JSON 파일명을 기록합니다. 이는 마이그레이션 제안입니다.
-- 재게시도 정상 버전 1개로 셉니다. 멱등 업로드 키나 미리보기→게시 분리 계약은 없습니다.
+- 정상 기존 파일은 첫 `list_versions`, `upload_excel`, `rollback`에서 잠금 안에 최초 등록하므로
+  정상 목록은 항상 유효한 VersionId를 반환합니다. 생성자에는 파일 접근 부작용이 없습니다.
+- 활성본이 없으면 내부적으로 빈 메타데이터를 만들 수 있지만 목록은 `PUBLISH_FAILED/500`으로 실패합니다.
+  `active_version_id=null` 성공 응답이나 가짜 버전은 만들지 않습니다. 정상 Excel의 첫 게시로 초기화할 수 있습니다.
+- 등록 전 활성본이 손상되거나 빈 배열이면 등록·게시를 거부하고 기존 파일을 보존합니다.
+  초기화는 정상 데이터의 검증·등록 문제이고, 데이터가 없는 상태의 HTTP 응답 규격은 별도 계약 문제입니다.
+- `PUBLISH_FAILED/500`(저장·재계산·복구·초기 데이터 없음)과 목록 잠금 충돌 `PUBLISH_IN_PROGRESS/409`는
+  기존 내부 오류 인터페이스를 유지합니다. OpenAPI에 없는 응답의 승인·명시는 ADE-43/46에서 필요합니다.
+  이 작업은 `contracts/openapi-v2.yaml`과 fixtures를 임의로 변경하지 않습니다.
+- VersionId는 실제 OpenAPI 패턴 `^[0-9]{8}T[0-9]{6}[+-][0-9]{4}$`의 KST ID를 사용합니다.
+  같은 초의 게시에서는 보관된 최신 ID보다 논리 시각을 1초 증가시켜 충돌을 막습니다.
+  업로드 `created_at`은 실제 KST 생성시각이며 ID를 실제 업로드 시간으로 해석하지 않습니다.
+- 최초 등록의 시각은 기존 파일 mtime입니다. 단일 `source_file`이면 그 기존 출처를,
+  복수 출처면 기존 JSON 파일명을 `source_name`으로 기록합니다. 실제 Excel 업로드 이벤트를 꾸미지 않습니다.
+  실제 최초 생성시각이나 업로드 이력을 알 수 없다는 의미는 API 연결 시에도 유지해야 합니다.
 
-API의 파일 형식·10 MB 제한, 세션·권한·쿠키와 비동기 요청에서 작업 스레드 실행은 ADE-46 담당입니다.
-새 업로드·목록·롤백 endpoint, 로그인, 관리자 화면은 구현하지 않았습니다.
-
-## 저장·잠금·복구
+## 저장 구조와 커밋 순서
 
 ```text
-<LIBRARY_RECORDS>                         활성 records JSON
-<LIBRARY_RECORDS>.versions/state.sqlite3  버전 메타데이터·정상 payload·활성 id·초기 복구본
-<LIBRARY_RECORDS>.versions/<id>.json      최신 정상 버전 4개 이하
-<LIBRARY_RECORDS>.versions/writer.lock    OS 소유 잠금 (삭제하지 않음)
+<LIBRARY_RECORDS>                            활성 records.json
+<LIBRARY_RECORDS>.versions/metadata.json     JSON 커밋 메타데이터
+<LIBRARY_RECORDS>.versions/<VersionId>.json  정상 스냅샷 최대 4개 (최초 등록 포함)
+<LIBRARY_RECORDS>.versions/writer.lock       OS가 소유하는 공용 프로세스 잠금
 ```
 
-SQLite의 commit이 데이터 변경의 확정점입니다. 메타데이터와 정상 payload를 같은
-트랜잭션으로 저장하고 JSON 파일은 이 상태에서 복원 가능한 사본으로 관리합니다.
-상태 파일은 백업이 아니라 버전 저장소의 필수 구성입니다. 통계/예측 DB를 새로 만든 것은 아닙니다.
+메타데이터는 `format_version=1`, `active_version_id`, 최신순 `versions`를 저장합니다.
+각 버전은 id, created_at, source_name, record_count와 내부 검증용 sha256을 가집니다.
+sha256은 API 응답에 추가하지 않습니다. 정상 데이터의 유일한 기준은 이 메타데이터와
+검증된 버전 JSON입니다. 활성 파일은 선택된 정상 스냅샷과 바이트까지 일치하도록 복구합니다.
+SQLite 읽기·쓰기·생성, DB 연결 및 DB 전용 구현은 제거했습니다. 기존 requirements에도
+SQLite 전용 패키지는 없었으므로 다른 의존성은 삭제하지 않았습니다.
 
-1. 기존 공용 전처리가 전체 Excel을 성공 검증합니다.
-2. 공용 OS 잠금 획득 후 마지막 커밋으로 미완료 작업을 복구합니다.
-3. 날짜·게이트 이력을 병합하고 임시 경로에서 기존 rebuild로 통계·예측 직렬화를 검증합니다.
-   rebuild에는 복사본을 넘기고, 임시 JSON을 재검증해 입력 변경도 거부합니다.
-4. 버전 JSON과 활성 JSON은 각각 동일 파일시스템의 임시파일 작성·fsync·검증 후 os.replace합니다.
-5. 새 파일 생성·교체 후 5번째 버전이면 가장 오래된 1개를 삭제합니다.
-6. 메타데이터를 commit합니다. 실패 시 SQLite rollback 후 이전 활성본·보관본을 복원합니다.
+첫 버전 등록은 OS 잠금 안에서 기존 파일의 스키마·비어 있지 않음·통계·예측을 검증하고,
+원래 바이트를 버전 JSON으로 저장한 뒤 메타데이터를 교체합니다. 활성 파일은 수정하지 않습니다.
+반복 호출과 여러 worker 초기화는 같은 메타데이터를 재사용합니다. 등록 중 종료되면
+원래 활성 파일로 다시 등록하거나 이미 커밋된 등록을 사용하며 중복 정상 버전을 만들지 않습니다.
+기존 품질 필드와 원본 표현도 보존합니다.
 
-파일 삭제 후 worker가 죽어도 미커밋 SQLite는 이전 상태로 되돌아갑니다. 다음
-`FileProvider.get`, 목록·게시·롤백은 잠금 아래 마지막 커밋의 payload로 활성 파일과
-보관 파일을 복원하고 orphan·임시파일을 정리합니다. 복구 전 새 데이터를 API에 반환하지 않습니다.
-롤백 대상은 DB에 보관 중인 id로 조회하고 실제 payload를 검증·재계산한 뒤 활성화합니다.
-보관 JSON 사본이 손상되면 커밋된 payload로 복원합니다. SQLite 권위본 자체가 손상되면 거부합니다.
+업로드는 공용 전처리 후 잠금 안에서 이전 이력 병합과 rebuild를 수행합니다.
+JSON은 각각 목적지와 같은 파일시스템의 임시파일에 완성하고 fsync·검증 후 os.replace합니다.
+Linux는 교체 후 부모 디렉터리도 fsync합니다. 다중 파일 전체를 자동 원자 작업으로 간주하지 않습니다.
 
-Windows는 msvcrt 바이트 잠금, Linux는 flock을 사용합니다. 서로 다른 인스턴스·스레드·worker가
-같은 절대 데이터 경로를 사용할 때 공유되며 프로세스 종료 시 해제됩니다.
-문서의 PythonAnywhere uvicorn UDS 실행과 scripts.serve의 단일 uvicorn 실행에 맞췄습니다.
-추가 worker도 동일 영구 로컬 저장소를 사용해야 합니다. 서로 다른 디스크/네트워크 저장소의
-분산 잠금은 제공하지 않습니다. 실제 호스팅 파일시스템의 잠금 의미는 ADE-50에서 확인해야 합니다.
-게시·롤백은 충돌 시 즉시 409, 조회는 최대 10초 기다린 뒤 잠금 오류를 반환합니다.
+1. 검증 완료한 새 불변 버전 JSON을 저장합니다. 이 시점에는 기존 4개를 삭제하지 않습니다.
+2. 활성 records.json을 새 스냅샷으로 원자 교체합니다. 목록·관리 조회는 같은 잠금으로 중간 상태를 보지 않습니다.
+3. metadata.json을 새 목록·활성 ID로 원자 교체합니다. 이것이 커밋 지점입니다.
+4. 새 메타데이터에 없는 가장 오래된 스냅샷과 임시 흔적을 정리합니다.
 
-기존 CLI도 같은 잠금을 사용합니다. 버전 저장소가 생기면 Excel refresh는 새 store로
-위임하고 JSON rebuild CLI 및 이전 JSON 업로드 API는 버전 저장소 우회를 거부합니다.
-직접 파일 편집이나 저수준 rebuild 함수로 운영 파일을 덮어쓰면 다음 조회 시 커밋 상태로 복구됩니다.
-저수준 rebuild는 임시 경로용으로만 사용해야 합니다. 새 관리 API를 연결하기 전 버전 저장소를
-운영 경로에 초기화하면 이전 업로드 경로가 거부되므로 ADE-50에서 전환 순서를 검증해야 합니다.
+커밋 전 예외에서는 이전 메타데이터·활성본을 복구합니다. 메타데이터 rename 직후 예외도
+이전 메타데이터로 되돌린 후 활성 파일을 복구하며, 기존 정상 4개를 삭제하지 않습니다.
+지속적인 디스크·권한 오류로 즉시 복구가 안 되면 오류를 반환하고, 쓰기 가능해진 뒤 다음 관리 조회에서 재시도합니다.
+SIGKILL이 메타데이터 커밋 전에 발생하면 다음 프로세스는 이전 정상본으로 복구합니다.
+커밋 후 종료되면 새 정상본이 기준이며 응답 전달 전 종료됐더라도 임의로 이전 버전을 선택하지 않습니다.
 
-## API 캐시·통계·예측 연결
+정리는 커밋 후에만 수행하며 삭제·디렉터리 조회 실패를 게시 실패로 반환하지 않습니다.
+다음 잠금 작업에서 재시도합니다. 목록의 정상 버전은 항상 최대 4개이며,
+삭제 장애나 커밋 직후 종료 시 참조되지 않는 물리 파일이 잠시 남을 수 있습니다.
+이는 정상 버전으로 표시하거나 롤백 대상으로 사용하지 않습니다.
+`.*.staged-*`, `.prepared-*`, rebuild의 `*.tmp`, 메타데이터에 없는 VersionId JSON만 정리합니다.
+알 수 없는 파일과 writer.lock은 삭제하지 않습니다. 별도의 영구 데이터베이스나 복구 상태 파일은 사용하지 않습니다.
 
-FileProvider는 같은 잠금 아래 복구 후 실제 파일 payload와 stat을 읽습니다.
-내용 hash와 mtime이 바뀌면 기존 LibraryService를 새로 만들어 통계·예측·추정 체류를 재계산합니다.
-worker마다 다음 요청에서 같은 변경을 감지하므로 프로세스 내부 캐시 삭제 callback은 필요 없습니다.
-게시·롤백 후 실제 stats/patterns/today API 응답 변경과 복구를 합성 데이터로 검증합니다.
-외부 CDN/HTTP 캐시가 새로 추가되면 해당 캐시 정책은 ADE-46/50에서 별도 연결해야 합니다.
+롤백은 보관된 정상 JSON을 검증·재계산한 뒤 동일 커밋 순서로 활성 ID를 바꿉니다.
+새 업로드 버전을 만들지 않고 목록 순서를 바꾸거나 보관 개수를 늘리지 않습니다.
+가장 오래된 버전으로 롤백 후 게시해도 이력을 해당 활성본 기준으로 병합하고,
+ID는 최신 보관 ID보다 크게 생성하며, 성공 커밋 후에만 가장 오래된 버전을 삭제합니다.
+없는 버전 또는 경로 형태의 ID는 기존 `VERSION_NOT_FOUND/404`입니다.
 
-## 복구 운영
+Windows는 msvcrt.locking, Linux는 flock으로 CLI·서버·여러 worker를 보호합니다.
+게시·등록·목록·롤백은 충돌 시 409이고 FileProvider의 조회는 최대 10초 기다립니다.
+worker 종료 시 OS가 잠금을 해제합니다. writer.lock 파일을 수동 삭제하지 않습니다.
+분산 잠금은 제공하지 않으므로 모든 worker는 동일 영구 로컬 경로를 사용해야 합니다.
 
-서비스를 중지한 뒤 활성 파일과 `.versions` 디렉터리를 함께 복사해 일관된 백업을 만듭니다.
-writer.lock 파일이 남아 있다는 이유로 삭제하지 않습니다. 잠금은 OS가 관리합니다.
-재시작하면 첫 관리 조회가 커밋 상태를 복원합니다. 확인용 호출은 아래와 같습니다.
+## 기존 경로와 캐시 연결
+
+FileProvider는 버전 관리가 시작된 경로에서 같은 잠금으로 메타데이터·스냅샷을 검증하고
+활성 파일을 복구한 뒤 동일 핸들의 payload/stat을 읽습니다. 파일 hash·mtime 변경 시
+LibraryService를 새로 구성해 통계·예측·추정 체류를 재계산합니다. worker별 다음 요청에도 적용됩니다.
+
+버전 관리 전의 이용자 읽기만으로 자동 등록하지는 않습니다. 기존 업로드 경로와의 호환을 위해
+전환 시 ADE-46에서 `list_versions` 등으로 명시적으로 초기 등록해야 합니다.
+metadata.json이 생기면 Excel refresh는 VersionStore로 위임하고, 기존 JSON 업로드 API와
+JSON rebuild CLI는 저장소 우회를 거부합니다. 저수준 rebuild 함수는 임시 경로에만 사용합니다.
+새 관리자 API 연결 전에 초기화하면 기존 업로드가 거부되므로 ADE-50에서 전환 순서를 검증해야 합니다.
+외부 CDN/HTTP 캐시는 이번 구현에 없으며 추가 시 ADE-46/50 연결이 필요합니다.
+
+## 운영 복구 및 이전 구현 전환
+
+서비스를 중지하거나 공용 잠금을 유지한 상태에서 활성 파일과 `.versions` 전체를 함께 백업합니다.
+첫 관리 조회는 모든 보관 JSON의 스키마·레코드 수·해시와 메타데이터를 검증하고 활성 파일을 복구합니다.
 
 ```python
 store = VersionStore(configured_records_path)
+versions = store.list_versions()  # 정상 기존 파일 최초 등록 또는 복구
 payload, stat = store.read_snapshot()
-versions = store.list_versions()
 ```
 
-디스크 장애로 즉시 복원이 실패하면 API는 오류를 반환합니다. 저장 공간·쓰기 권한을
-복구한 뒤 위 조회를 재실행합니다. SQLite 파일이 손상되면 자동 선택/덮어쓰기를 하지 말고
-서비스를 중지해 정상 전체 백업을 복원한 뒤 검증합니다. 수동 파일 교체를 운영 절차로 사용하지 않습니다.
+활성 파일만 손상·유실됐고 정상 보관본이 있으면 메타데이터에 지정된 활성 스냅샷으로 복구합니다.
+보관 JSON·메타데이터 자체가 손상됐으면 추측한 버전을 활성화하지 않고 거부합니다.
+DB에 숨겨진 payload로 복구하지 않습니다. 서비스 중지 후 일관된 정상 전체 백업을 복원해야 합니다.
+메타데이터만 지워 재초기화하는 방식은 정상 복구 절차가 아닙니다.
 
-## 초기 Windows 검증 기록 (9912482)
+이전 실험 구현의 state.sqlite3가 남아 있어도 새 구현은 읽거나 열거나 삭제하지 않습니다.
+기존 DB 이력의 자동 이전은 제공하지 않습니다. 전환 전에 서비스를 중지하고
+정상 활성 JSON을 확인·백업한 뒤 초기 등록합니다. 이전 DB에만 있는 역사 복원은 별도 운영 결정이며,
+이번 변경은 실제 운영 파일이나 과거 DB를 수정하지 않았습니다.
 
-Python 3.12.14, openpyxl 3.1.5, FastAPI 0.142.2, pytest 9.1.1,
-Playwright 1.63.0. requirements-dev.txt의 허용 범위로 별도 worktree 가상환경에 설치했습니다.
-requirements-lock.txt와 동일 환경을 검증한 것은 아닙니다.
+## 이번 실행 검증 · 2026-10-04
 
-- 기준 develop: `python -m pytest -q` → 174 passed.
-- ADE-45: `python -m pytest -q` → 206 passed, httpx 관련 Starlette deprecation 경고 1개.
-- `python -m scripts.e2e` / `python -m scripts.e2e_present` → PASS.
-- `git diff --check` → 통과.
-- 정상 Excel, 필수 열·중복·결측·음수·소수·수식·날짜 오류, 실패 시 전체 보존,
-  5번째 버전 4개 유지, 기존 정상본 마이그레이션·롤백, API 통계·예측·캐시,
-  프로세스·스레드 충돌, stage/rebuild/replace/prune/commit 실패,
-  첫 게시/5번째 게시 중 프로세스 종료·재시작 복구, 사본 손상 복원·권위본 손상 거부를 검증했습니다.
-- 신규 자동 테스트의 Excel은 임시 합성 fixture로만 생성하며 실제 자료나 개인정보를 포함하지 않습니다.
-- 로컬 실제 Excel 추가 검증 결과는 PR 초안에 별도로 기록합니다. 원본과 생성 JSON은 Git에 포함하지 않습니다.
+이번 결과는 과거 211 passed 기록을 재사용한 것이 아닙니다. 합성 records·Excel만 임시 경로에 생성했습니다.
+실제 Excel·운영 JSON·개인정보·비밀값은 추가하거나 변경하지 않았습니다.
 
-초기 작업 당시 미실행: Linux의 flock 실제 실행, PythonAnywhere multi-worker·파일시스템 검증, 실제 운영 API,
-새 관리자 세션·업로드 화면 E2E, ADE-44 새 fixture 검증, ADE-50 배포·운영 검증.
-처음 기본 Python에는 pytest가 없고 기존 팀 venv에는 PyYAML이 없었습니다.
-개발 의존성을 별도 환경에 설치한 후 실행했습니다. 장애 테스트가 입력 변이 비교 결함을
-발견해 deepcopy로 수정했고, 이 회귀 테스트를 유지합니다.
+Windows Python 3.12.14, 작업 경로 `C:\study\library-service-ade45`의 기존 Windows 가상환경:
 
-## 후속 Linux 검증 (2026-10-03)
+```powershell
+.venv\Scripts\python.exe -m pytest tests/test_versions.py tests/test_versions_migration.py tests/test_versions_process_recovery.py tests/test_versions_json.py -q
+.venv\Scripts\python.exe -m pytest -q
+.venv\Scripts\python.exe -m scripts.e2e
+.venv\Scripts\python.exe -m scripts.e2e_present
+git diff --check
+```
 
-WSL2 Ubuntu 24.04.4 LTS, 커널 `6.18.33.2-microsoft-standard-WSL2`, Python 3.12.3.
-checkout은 `/home/psy/ade45-linux-20261003-e9oKAZ`, 파일시스템은 `/dev/sdd`의 ext4입니다.
-검증용 임시 데이터도 Linux `/tmp`에 생성합니다. `/mnt/c`에서 pytest를 실행하거나
-Windows 가상환경을 재사용하지 않았습니다. Windows에서 새 테스트 소스만 복사했습니다.
-기준 production 코드는 `9912482`이며 후속 변경은 합성 테스트·문서에 한정합니다.
+- 관련 테스트: 46 passed, POSIX 전용 11 skipped, 0 failed.
+- 전체: 220 passed, 11 skipped, 0 failed.
+- 두 E2E: PASS. 전체 pytest의 기존 Starlette/httpx deprecation 경고 1개.
 
-Linux 가상환경에 `requirements-dev.txt`를 설치했습니다. 처음 전체 검사는 204 passed,
-2 failed였으며 실패 원인은 기존 업로더 GUI 테스트의 tkinter 미설치였습니다.
-Ubuntu에 `python3-tk`를 설치해 해결했고 업로더 코드나 ADE-48 변경을 합치지 않았습니다.
-Chromium의 Linux 의존성은 `playwright install-deps chromium`으로 준비했습니다.
+WSL Ubuntu Python 3.12.3, ext4 `/home/psy/ade45-json-20261004-d3UPyj`:
+기존 Linux 전용 가상환경 `/home/psy/ade45-linux-20261003-e9oKAZ/.venv`를 심볼릭 링크로 재사용했습니다.
+Windows 가상환경은 사용하지 않았고 checkout과 합성 임시 데이터는 ext4에 있습니다.
 
 ```sh
-cd /home/psy/ade45-linux-20261003-e9oKAZ
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements-dev.txt
-.venv/bin/python -m pytest tests/test_versions.py tests/test_versions_migration.py tests/test_versions_process_recovery.py -q
+cd /home/psy/ade45-json-20261004-d3UPyj
+.venv/bin/python -m pytest tests/test_versions.py tests/test_versions_migration.py tests/test_versions_process_recovery.py tests/test_versions_json.py -q
 .venv/bin/python -m pytest -q
-.venv/bin/python -m playwright install chromium
 .venv/bin/python -m scripts.e2e
 .venv/bin/python -m scripts.e2e_present
 ```
 
-신규 `test_versions_process_recovery.py`는 POSIX 전용 5개 경우입니다. 실제 게시/롤백 worker를
-rebuild, 활성 파일 교체 직후, 가장 오래된 보관본 삭제 직후, DB commit 직전,
-롤백 commit 직전에 멈춥니다. 다른 프로세스의 게시와 롤백이 409로 거부되는지 확인하고
-SIGKILL로 worker를 종료합니다. 이어 완전히 새 Python 프로세스가 FileProvider/API를 통해
-복구합니다. 활성 파일·보관본 hash, 전체 메타데이터·활성 id, stats/patterns/today의 통계·예측이
-종료 전 마지막 커밋과 일치하는지 비교하고 후속 게시까지 확인합니다.
-실제 기록·개인정보·운영 경로는 사용하지 않습니다. Windows에서는 이 5개를 명시적으로 skip합니다.
+- 관련 테스트: 57 passed, 0 skipped/failed.
+- 전체: 231 passed, 0 skipped/failed.
+- 두 E2E: PASS. 전체 pytest의 기존 Starlette/httpx deprecation 경고 1개.
+- Linux SIGKILL 11개 경우: 최초 등록 rebuild/버전 파일/메타데이터 경계 3개,
+  게시 rebuild/버전 파일/활성 파일/커밋 직전/메타데이터 교체/정리와
+  롤백 커밋 직전/메타데이터 교체 경계 8개. 새 프로세스로 파일·목록·활성 ID와
+  실제 stats/patterns/today 결과를 비교하며 후속 게시·잠금 해제도 검증합니다.
+- 메타데이터 커밋 이후 경우는 새 정상 상태, 이전 경우는 기존 정상 상태로 복구하는지 확인합니다.
+- 초기 등록·품질 바이트 보존·반복/4개 프로세스 초기화·활성본 없음/손상/빈 배열,
+  정상/오류 Excel·최대 4개/5번째 정리·롤백/없는 ID·과거 롤백 후 게시·잠금 충돌,
+  fsync/rebuild/파일 교체/메타데이터 예외·정리 재시도·JSON 손상·해시 불일치를 검증했습니다.
+- SQLite connect를 실패시키는 상태에서 초기 등록·게시·롤백·재시작 목록이 성공하고
+  임시 경로에 sqlite/db 파일이 없는지 검사합니다. 실행 코드·requirements의 DB 참조도 검색합니다.
+- 정상 초기 목록과 업로드·목록·롤백 결과를 실제 OpenAPI schema로 검증하고 기존 이용자 API 회귀를 유지합니다.
 
-검증 결과: 잠금·복구 관련 37 passed, Linux 전체 211 passed, Linux scripts.e2e와
-scripts.e2e_present 모두 PASS입니다. Windows는 전체 206 passed, POSIX 전용 5 skipped입니다.
-각 전체 pytest에 기존 Starlette/httpx deprecation 경고 1개가 있습니다.
-Windows와 Linux의 신규 테스트 파일 SHA-256이 동일함을 확인했습니다.
-추가 검증 범위에서 저장 모듈 결함은 발견되지 않아 production 코드는 변경하지 않았습니다.
-기존 PR의 Ubuntu tests workflow 성공도 확인했고 리뷰·인라인 댓글은 없었습니다.
-후속 push의 CI 상태는 PR #20에서 별도로 확인합니다.
+기존 DB payload 손상 테스트를 JSON 메타데이터 손상·정상 보관본 손상/유실/해시 불일치 테스트로
+대체했습니다. 삭제 실패 항목은 커밋 후 정리 재시도 테스트로 옮겼습니다. 테스트 개수는 211→231로
+20개 증가했고 저장 실패·정리·손상 검증을 없애 개수를 줄이지 않았습니다.
 
-결과와 플랫폼별 구분은 PR #20 본문에도 기록합니다. 이 로컬 Linux 검증은 실제
-PythonAnywhere의 worker·파일시스템·전원 장애·운영 데이터 검증을 대신하지 않습니다.
-새 관리자 endpoint·세션·화면, ADE-44 계약 fixture 및 ADE-50 통합 검증은 남아 있습니다.
+## 남은 의존성과 미검증 환경
+
+ADE-44 검증 계약·공통 fixture 확정 후 공용 전처리 대조, ADE-43/46의 초기 데이터 없음·500·목록 충돌
+응답 명시, ADE-46 세션·관리자 API 연결, ADE-50 실제 PythonAnywhere worker·파일시스템·운영 데이터/API·
+전체 웹 통합 검증이 남아 있습니다. 실제 전원 장애·영구 디스크 손상·분산 파일시스템은 미검증입니다.
+WSL ext4의 SIGKILL 복구 결과를 PythonAnywhere 운영 검증으로 해석하지 않습니다.
+PR Draft와 Linear In Progress를 유지하며 이 작업에서 병합·배포하지 않습니다.

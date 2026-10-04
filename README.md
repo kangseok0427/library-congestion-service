@@ -79,8 +79,9 @@ Excel 갱신 시에는 위 `library_etl refresh`를 사용합니다. 부분 날�
 
 통계와 API는 공통 `records.json`을 사용합니다. 통계용 CSV·SQLite 저장소나
 `pandas`/`numpy` 실행 의존성은 사용하지 않습니다.
-ADE-45의 버전 메타데이터·복구 payload에는 SQLite를 사용하며 정상 JSON은 최신 4개를
-보관합니다. [서버 게시·롤백 연결과 복구](docs/server-json-versions.md)를 참고합니다.
+ADE-45는 활성 records.json, 최초 정상본을 포함한 버전 JSON 최대 4개,
+JSON 메타데이터만 사용합니다. 정상 초기 파일은 첫 버전 관리 호출에서 등록되며
+메타데이터 커밋을 기준으로 게시·롤백·복구합니다. [서버 게시·롤백 연결과 복구](docs/server-json-versions.md)를 참고합니다.
 ADE-44 검증 계약 확정과 ADE-46 관리자 API 연결·ADE-50 운영 통합은 별도 작업입니다.
 
 ```sh
