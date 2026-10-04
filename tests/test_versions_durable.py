@@ -316,3 +316,36 @@ def test_unreadable_directory_rejects_new_candidate(tmp_path, monkeypatch):
             upload(store, tmp_path, 20)
         assert store.path.read_bytes() == payload
     assert version_files(store) == files
+
+
+@pytest.mark.skipif(os.name != 'posix', reason='Linux directory fsync')
+def test_pending_initial_decision_is_recovered_before_same_call_upload(tmp_path, monkeypatch):
+    import stat
+    from tests.test_versions_json import baseline
+    store = baseline(tmp_path)
+    original = store.path.read_bytes()
+    real_replace, real_fsync = os.replace, os.fsync
+    decided = False
+    def replace(source, destination):
+        nonlocal decided
+        real_replace(source, destination)
+        if (Path(destination) == store.recovery
+                and json.loads(store.recovery.read_bytes())['phase'] == 'committed'):
+            decided = True
+    def fsync(fd):
+        if decided and stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError('persistent directory fsync after initial decision')
+        return real_fsync(fd)
+    with monkeypatch.context() as fault:
+        fault.setattr(os, 'replace', replace)
+        fault.setattr(os, 'fsync', fsync)
+        with pytest.raises(VersionError):
+            upload(store, tmp_path, 20)
+        record = json.loads(store.recovery.read_bytes())
+        assert record['phase'] == 'committed'
+        assert record['initialize'] is True
+        assert len(version_files(store)) == 1
+        assert store.path.read_bytes() == original
+    assert len(fresh(store.path)['versions']) == 1
+    upload(store, tmp_path, 20)
+    assert len(version_files(store)) == 2

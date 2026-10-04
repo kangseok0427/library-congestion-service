@@ -202,6 +202,9 @@ class VersionStore:
             with data_lock(self.path, wait=wait):
                 self._recover_transaction()
                 state = self._initialize()
+                # Registration itself may leave a committed but unfinished record.
+                # Resolve it before the same call proceeds to upload/rollback.
+                self._recover_transaction()
                 self._recover(state)
                 return operation(state)
         except VersionError:
@@ -219,6 +222,8 @@ class VersionStore:
 
     def _require_clean(self, state):
         """Remove existing orphans before allocating another candidate snapshot."""
+        if self.recovery.exists():
+            raise VersionError('이전 작업 복구가 완료되지 않았습니다.', 'PUBLISH_FAILED', 500)
         self._collect_garbage(state)
         retained = {r['id'] + '.json' for r in state['versions']}
         # scandir propagates enumeration errors; glob may silently hide them.

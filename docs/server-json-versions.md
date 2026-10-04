@@ -274,8 +274,8 @@ git diff --check
 
 | 환경 | 관련 pytest | 전체 pytest | e2e / e2e_present |
 | --- | --- | --- | --- |
-| Windows Python 3.12.14 | 53 passed, 20 skipped | 227 passed, 20 skipped | PASS / PASS |
-| WSL Ubuntu Python 3.12.3, ext4 | 73 passed | 247 passed | PASS / PASS |
+| Windows Python 3.12.14 | 53 passed, 21 skipped | 227 passed, 21 skipped | PASS / PASS |
+| WSL Ubuntu Python 3.12.3, ext4 | 74 passed | 248 passed | PASS / PASS |
 
 모든 실행은 0 failed입니다. 전체 pytest의 기존 Starlette/httpx deprecation 경고 1개는 남아 있습니다.
 Windows 임시 checkout: `C:\Users\user\AppData\Local\Temp\ade45-fix-validation-dt68z0zg\windows`.
@@ -304,3 +304,6 @@ ADE-44 검증 계약·공통 fixture 확정 후 공용 전처리 대조, ADE-43/
 전체 웹 통합 검증이 남아 있습니다. 실제 전원 장애·영구 디스크 손상·분산 파일시스템은 미검증입니다.
 WSL ext4의 SIGKILL 복구 결과를 PythonAnywhere 운영 검증으로 해석하지 않습니다.
 PR Draft와 Linear In Progress를 유지하며 이 작업에서 병합·배포하지 않습니다.
+
+최초 등록의 최종 확정 후 디렉터리 fsync가 계속 실패하면, 같은 호출의 후속 업로드 전에
+복구를 재시도합니다. 기존 초기 등록 기록을 새 게시 의도로 덮어쓰지 않는 추가 회귀도 통과했습니다.

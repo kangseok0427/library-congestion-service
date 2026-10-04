@@ -35,8 +35,8 @@ Linux에서 게시/롤백 P1과 P2 3개 실패를 확인한 뒤 구현했습니�
 
 | 환경 | 관련 pytest | 전체 pytest | scripts.e2e | scripts.e2e_present |
 | --- | --- | --- | --- | --- |
-| Windows Python 3.12.14 | 53 passed / 20 skipped | 227 passed / 20 skipped | PASS | PASS |
-| WSL Ubuntu Python 3.12.3, ext4 | 73 passed | 247 passed | PASS | PASS |
+| Windows Python 3.12.14 | 53 passed / 21 skipped | 227 passed / 21 skipped | PASS | PASS |
+| WSL Ubuntu Python 3.12.3, ext4 | 74 passed | 248 passed | PASS | PASS |
 
 0 failed. Windows skips는 Linux 전용 fsync/SIGKILL 검증입니다. 기존 Starlette/httpx 경고 1개가 남습니다.
 관련: `python -B -m pytest tests/test_versions.py tests/test_versions_migration.py tests/test_versions_process_recovery.py tests/test_versions_json.py tests/test_versions_durable.py -q -p no:cacheprovider --basetemp <temp>`.
@@ -66,3 +66,6 @@ Linux는 ext4 `/home/psy/ade45-fix-snrYL6`입니다. 플랫폼별 기존 가상�
 
 검토 기준 SHA: de75697c3e0837f81dd947bdb9ae6a0eff16c925.
 기준 develop: 95ed76e3f925ed450ded869182a904d74f185547.
+
+최초 등록의 최종 확정 후 디렉터리 fsync가 계속 실패하면, 같은 호출의 후속 업로드 전에
+복구를 재시도합니다. 기존 초기 등록 기록을 새 게시 의도로 덮어쓰지 않는 추가 회귀도 통과했습니다.
