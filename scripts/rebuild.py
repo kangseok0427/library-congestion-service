@@ -39,10 +39,15 @@ def main():
         from library_etl import refresh
         report=refresh(args.source,args.output,partial_dates=[] if args.all_complete else args.partial_date)
     else:
+        from library_etl.locking import data_lock, storage_directory
+        from backend.domain import DataError
         records=read_records(args.source)
         report={'record_count':len(records),'backtest':backtest(LibraryService(records).rows)}
         json.dumps(report,allow_nan=False)
-        rebuild(records,args.output)
+        with data_lock(args.output):
+            if any((storage_directory(args.output) / name).exists() for name in ('metadata.json', 'recovery.json')):
+                raise DataError('버전 관리 데이터는 VersionStore 또는 Excel refresh로 갱신하세요.')
+            rebuild(records,args.output)
     # Reports are returned on stdout; no fallible report-file write after commit.
     try:
         print(json.dumps(report,ensure_ascii=True))

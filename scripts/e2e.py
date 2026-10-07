@@ -1,4 +1,9 @@
-"""Browser verification of records -> API -> DOM, refresh, mobile, errors."""
+"""Browser verification of records -> API -> DOM, refresh, mobile, errors.
+
+ADE-49: the visitor page shows only bars and a guidance message, so DOM checks
+compare each bar (hour, level, estimated_present data attribute) with the API
+response instead of reading numbers from a table or an actual-count card.
+"""
 import argparse
 import copy
 import json
@@ -20,6 +25,28 @@ from backend.library_hours import DEFAULT_HOURS
 from library_etl import refresh
 from scripts.rebuild import rebuild
 from scripts.sample import generate
+
+
+def bar_state(page):
+    return page.locator('#chart .column').evaluate_all(
+        'els => els.map(e => [Number(e.dataset.hour), e.dataset.level, e.dataset.present])')
+
+
+def api_bars(page, url, day):
+    data = page.request.get(f'{url}/api/v1/congestion/today?date={day}').json()
+    return [[h.get('start_hour', h.get('hour')),
+             (h['level'] or 'none') if h['estimated_present'] is not None else 'none',
+             '' if h['estimated_present'] is None else str(h['estimated_present'])] for h in data['hourly']]
+
+
+def expect_bars_match_api(page, url, day):
+    expected = api_bars(page, url, day)
+    expect(page.locator('#chart .column')).to_have_count(len(expected))
+    for _ in range(50):
+        if bar_state(page) == expected:
+            return expected
+        time.sleep(.1)
+    raise AssertionError((bar_state(page), expected))
 
 
 def main():
@@ -46,17 +73,20 @@ def main():
                 page.clock.install(time=datetime.fromisoformat(args.date+'T08:00:00+09:00'))
                 page.goto(url)
                 page.locator('#date').fill(args.date);page.get_by_role('button',name='조회',exact=True).click()
-                expect(page.locator('#actual')).to_contain_text(f'IN {expected}명')
-                expect(page.locator('#hourly tr')).to_have_count(count)
-                assert page.locator('#chart .bar').count()==count
-                before=page.locator('#hourly').inner_text()
+                expect(page.locator('#guide')).to_have_attribute('data-state', 'open')
+                first_bars = expect_bars_match_api(page, url, args.date)
+                assert len(first_bars) == count
+                assert page.request.get(url+'/api/v1/stats?date='+args.date).json()['hourly_total_in'] == expected
+                # ADE-49: no detailed table, no actual-count card, no number-centred text.
+                assert page.locator('table').count() == 0 and page.locator('#actual').count() == 0
+                assert '명' not in page.locator('#hours').inner_text()
                 changed=copy.deepcopy(records)
                 for row in changed:
                     row['in_count']+=100;row['total_in']+=1600
                 rebuild(changed,path)
                 page.get_by_role('button',name='새로고침').click()
-                expect(page.locator('#actual')).to_contain_text(f'IN {expected+count*200}명')
-                assert before!=page.locator('#hourly').inner_text()
+                assert page.request.get(url+'/api/v1/stats?date='+args.date).json()['hourly_total_in'] == expected+count*200
+                assert expect_bars_match_api(page, url, args.date) != first_bars
                 # Exercise T02/T08 with a real synthetic XLSX, not only JSON.
                 if not args.records:
                     book=Workbook();sheet=book.active
@@ -67,15 +97,16 @@ def main():
                     source=Path(directory)/'refresh.xlsx';book.save(source)
                     refresh(source,path,partial_dates=[])
                     page.get_by_role('button',name='새로고침').click()
-                    expect(page.locator('#actual')).to_contain_text(f'IN {count*14}명')
+                    assert page.request.get(url+'/api/v1/stats?date='+args.date).json()['hourly_total_in'] == count*14
                     assert page.request.get(url+'/api/v1/stats?date='+args.date).json()['hourly'][2]['out_count'] == 14
+                    refreshed=expect_bars_match_api(page, url, args.date)
                     saved=path.read_bytes();sheet.cell(2,6).value='=1+1';book.save(source);book.close()
                     try:refresh(source,path,partial_dates=[])
                     except DataError:pass
                     else:raise AssertionError('Invalid workbook was accepted')
                     assert path.read_bytes()==saved
                     page.get_by_role('button',name='새로고침').click()
-                    expect(page.locator('#actual')).to_contain_text(f'IN {count*14}명')
+                    assert expect_bars_match_api(page, url, args.date) == refreshed
                 # All 8 dates, real server rules, independent of browser timezone.
                 first=date.fromisoformat(args.date)
                 expect(page.locator('#date')).to_have_attribute('min',args.date)
@@ -86,13 +117,13 @@ def main():
                     page.locator('#date').fill(day)
                     page.get_by_role('button',name='조회',exact=True).click()
                     if DEFAULT_HOURS.is_closed(target):
-                        expect(page.locator('#level')).to_have_text('휴관일')
-                        expect(page.locator('#best')).to_have_text('휴관일')
-                        expect(page.locator('#actual')).to_have_text('휴관일')
-                        expect(page.locator('#hourly tr')).to_have_count(0)
+                        expect(page.locator('#guide')).to_have_attribute('data-state','closed')
+                        expect(page.locator('#guide-title')).to_have_text('휴관일')
+                        expect(page.locator('#hours')).to_be_hidden()
+                        expect(page.locator('#chart .column')).to_have_count(0)
                     else:
-                        expect(page.locator('#hourly tr')).to_have_count(len(DEFAULT_HOURS.hours(target)))
-                        if offset:expect(page.locator('#actual')).to_have_text('집계 전')
+                        expect(page.locator('#hours')).to_be_visible()
+                        expect(page.locator('#chart .column')).to_have_count(len(DEFAULT_HOURS.hours(target)))
                         expect(page.locator('#error')).to_be_hidden()
                 for offset in (-1,8):
                     bad=(first+timedelta(days=offset)).isoformat()
@@ -100,12 +131,12 @@ def main():
                     assert not page.locator('#date').evaluate('(el) => el.checkValidity()')
                     page.get_by_role('button',name='새로고침').click()
                     expect(page.locator('#error')).to_contain_text('오늘부터 7일 후')
-                    expect(page.locator('#hourly tr')).to_have_count(0)
+                    expect(page.locator('#chart .column')).to_have_count(0)
                     assert page.request.get(url+'/api/v1/congestion/today?date='+bad).status==400
                     assert page.request.get(url+'/api/v1/stats?date='+bad).status==400
                 page.locator('#date').fill(args.date)
                 page.get_by_role('button',name='새로고침').click()
-                expect(page.locator('#hourly tr')).to_have_count(count)
+                expect(page.locator('#chart .column')).to_have_count(count)
                 page.set_viewport_size({'width':390,'height':844})
                 assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
                 Path('test-results').mkdir(exist_ok=True)
@@ -116,13 +147,13 @@ def main():
                 path.write_text('{broken',encoding='utf-8')
                 page.get_by_role('button',name='새로고침').click()
                 expect(page.locator('#error')).to_be_visible()
-                expect(page.locator('#hourly tr')).to_have_count(0)
+                expect(page.locator('#chart .column')).to_have_count(0)
                 browser.close()
             print(json.dumps({'e2e':'PASS','input':'real_records' if args.records else 'synthetic',
-                              'checks':['API to DOM','operating-hour forecast rows and bars','8 KST dates including closed and pending states','past and +8 rejected in UI and API','America/Los_Angeles browser timezone','record replacement updates actual and forecast',
-                                        '390px no page overflow','invalid replacement error and stale number removal']+
-                                       (['synthetic XLSX refresh updates DOM','OUT_11 source value preserved',
-                                         'invalid XLSX preserves JSON and DOM'] if not args.records else [])},ensure_ascii=False))
+                              'checks':['API to DOM (each bar hour, level, estimated_present)','operating-hour forecast bars','no table, actual card or 명 text (ADE-49)','8 KST dates including closed and pending states','past and +8 rejected in UI and API','America/Los_Angeles browser timezone','record replacement updates stats API and bars',
+                                        '390px no page overflow','invalid replacement error and stale bar removal']+
+                                       (['synthetic XLSX refresh updates API and bars','OUT_11 source value preserved',
+                                         'invalid XLSX preserves JSON and bars'] if not args.records else [])},ensure_ascii=False))
         finally:
             process.terminate();process.wait(timeout=10)
 

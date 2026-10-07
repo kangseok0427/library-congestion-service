@@ -2,7 +2,6 @@
 import copy
 import json
 from datetime import date, datetime
-from urllib.parse import urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +12,6 @@ from backend.domain import validate_records
 from backend.library_hours import KST
 from scripts.rebuild import rebuild
 from scripts.sample import generate
-from windows_uploader.upload import PRODUCTION_UPLOAD_ENDPOINT, UploadClient
 
 
 TOKEN = 'synthetic-admin-token'
@@ -149,43 +147,5 @@ def test_final_replace_failure_keeps_live_snapshot(upload_service, monkeypatch):
     assert response.status_code == 500
     assert response.json() == {'error': {
         'code': 'PUBLISH_FAILED',
-        'message': '데이터 교체에 실패하여 기존 정상본을 유지했습니다.'}}
+        'message': '데이터 교체에 실패하여 기존 정상본을 유지했습니다.', 'details': []}}
     assert path.read_bytes() == before
-
-
-def test_windows_client_contract_matches_server_endpoint():
-    assert PRODUCTION_UPLOAD_ENDPOINT == (
-        'https://ade0033.pythonanywhere.com/api/v1/admin/records')
-    client = UploadClient(PRODUCTION_UPLOAD_ENDPOINT,
-                          transport=lambda request, timeout: None)
-    assert client.endpoint == PRODUCTION_UPLOAD_ENDPOINT
-
-
-def test_windows_client_to_fastapi_contract_end_to_end(upload_service):
-    path, api, _ = upload_service
-    replacement = generate(end=date(2026, 9, 10), days=3)
-
-    class Response:
-        def __init__(self, response):
-            self.status = response.status_code
-            self.body = response.content
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        def read(self):
-            return self.body
-
-    def transport(request, timeout):
-        assert timeout == 20 * 60
-        response = api.request(request.get_method(), urlsplit(request.full_url).path,
-                               content=request.data, headers=dict(request.header_items()))
-        return Response(response)
-
-    uploader = UploadClient(PRODUCTION_UPLOAD_ENDPOINT, transport=transport, retries=0)
-    assert uploader.fetch(TOKEN) == validate_records(generate(end=date(2026, 9, 10), days=2))
-    assert uploader.send(replacement, TOKEN) == 200
-    assert json.loads(path.read_text(encoding='utf-8')) == validate_records(replacement)

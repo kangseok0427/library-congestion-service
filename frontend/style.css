@@ -1,4 +1,4 @@
-/* T05 (ADE-9) 이용자 웹 — 모바일(QR 접속) 우선, 390px 기준 */
+/* T05 (ADE-9) 이용자 웹 — 모바일(QR 접속) 우선, 390px 기준. ADE-49: 안내 멘트 + 시간대별 막대만 유지 */
 :root {
   --paper: #F5F4EF; --card: #FFFFFF; --ink: #1B211E; --muted: #5E6862; --line: #DCDFD8;
   --quiet: #2A7A57; --quiet-bg: #DFF0E7;
@@ -11,6 +11,7 @@
   -webkit-text-size-adjust: 100%;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; }
 main { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; }
 h1 { font-size: 26px; line-height: 1.25; margin: 4px 0 14px; letter-spacing: -0.01em; }
@@ -30,23 +31,17 @@ button:focus-visible, input:focus-visible, .column:focus-visible { outline: 3px 
 .error { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--busy-bg); color: var(--busy); }
 .banner { margin-top: 14px; padding: 10px 14px; border-radius: 12px; background: var(--normal-bg); color: var(--normal); font-size: 14px; }
 
-/* 지금 상태 — 페이지에서 유일하게 큰 요소 */
-.now { margin-top: 16px; padding: 22px 20px 18px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
-.now-when { font-size: 14px; color: var(--muted); }
-.now-level { font-size: 64px; font-weight: 700; line-height: 1.05; margin: 6px 0 10px; letter-spacing: -0.02em; }
-.now-level.small { font-size: 22px; font-weight: 600; }
-.now-basis { font-size: 13px; color: var(--muted); }
-.now[data-level="quiet"]  { background: var(--quiet-bg);  border-color: transparent; } .now[data-level="quiet"]  .now-level { color: var(--quiet); }
-.now[data-level="normal"] { background: var(--normal-bg); border-color: transparent; } .now[data-level="normal"] .now-level { color: var(--normal); }
-.now[data-level="busy"]   { background: var(--busy-bg);   border-color: transparent; } .now[data-level="busy"]   .now-level { color: var(--busy); }
+/* 방문 안내 멘트 — 화면 맨 위의 유일한 글 덩어리 */
+.guide { margin-top: 16px; padding: 18px 20px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+.guide-when { font-size: 14px; color: var(--muted); }
+.guide-title { font-size: 22px; font-weight: 700; margin-top: 2px; }
+.guide-message { font-size: 17px; line-height: 1.55; margin-top: 4px; }
+.guide[data-state="closed"], .guide[data-state="insufficient"] { background: #EEEFEC; border-color: transparent; }
+.guide[data-state="closed"] .guide-title, .guide[data-state="insufficient"] .guide-title { color: var(--muted); }
+.guide[data-state="loading"] .guide-message:empty { display: none; }
 
-.reco { margin-top: 12px; padding: 16px 20px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
-.reco-title { font-size: 14px; color: var(--muted); }
-.reco-hours { font-size: 28px; font-weight: 700; margin: 2px 0 4px; }
-.reco-msg { font-size: 14px; color: var(--muted); }
-
-.hours, .actual-box { margin-top: 20px; padding: 18px 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
-.chart { display: flex; align-items: flex-end; gap: 3px; height: 150px; margin: 14px 0 4px; padding-bottom: 22px; border-bottom: 1px solid var(--line); position: relative; }
+.hours { margin-top: 12px; padding: 18px 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+.chart { display: flex; align-items: flex-end; gap: 3px; height: 180px; margin: 14px 0 4px; padding-bottom: 22px; border-bottom: 1px solid var(--line); position: relative; }
 .column { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 0; border: 0; background: none; border-radius: 6px; position: relative; }
 .column .bar { width: 100%; border-radius: 4px 4px 0 0; transition: height .2s ease; }
 .column span { position: absolute; bottom: -20px; font-size: 11px; color: var(--muted); }
@@ -59,15 +54,10 @@ button:focus-visible, input:focus-visible, .column:focus-visible { outline: 3px 
 .legend .quiet::before { background: var(--quiet); } .legend .normal::before { background: var(--normal); } .legend .busy::before { background: var(--busy); } .legend .none::before { background: var(--none); }
 .detail { font-size: 14px; min-height: 1.6em; }
 
-details { margin-top: 10px; }
-summary { font-size: 14px; color: var(--accent); cursor: pointer; }
-.table-wrap { overflow-x: auto; margin-top: 8px; }
-table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }
-th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
-th { color: var(--muted); font-weight: 500; }
+.basis { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
 footer { margin-top: 24px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 footer p + p { margin-top: 4px; }
 
 @media (prefers-reduced-motion: reduce) { .column .bar { transition: none; } }
-@media (min-width: 600px) { main { padding-top: 40px; } .now-level { font-size: 72px; } }
+@media (min-width: 600px) { main { padding-top: 40px; } .chart { height: 220px; } }

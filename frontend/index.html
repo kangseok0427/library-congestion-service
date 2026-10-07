@@ -19,50 +19,31 @@
       <button type="submit">조회</button>
       <button type="button" id="refresh" class="ghost">새로고침</button>
     </form>
-    <p class="hint">한국시간 기준 오늘부터 7일 후까지 조회할 수 있습니다. 휴관일에는 예측과 추천을 제공하지 않습니다.</p>
+    <p class="hint">오늘부터 7일 후까지 볼 수 있습니다.</p>
   </header>
 
   <p id="error" class="error" role="alert" hidden></p>
   <p id="sample" class="banner" hidden>합성 샘플 데이터로 보는 예시입니다. 실제 도서관 수치가 아닙니다.</p>
 
-  <section class="now" id="now" data-level="">
-    <p class="now-when" id="now-when">불러오는 중</p>
-    <p class="now-level" id="level">—</p>
-    <p class="now-basis" id="basis">과거 이용 패턴으로 계산한 예상 방문량 기준입니다. 현재 체류인원이 아닙니다.</p>
+  <!-- ADE-49: 방문 안내 멘트. 휴관일·자료 부족도 여기서 글로 알립니다. -->
+  <section class="guide" id="guide" data-state="loading" aria-live="polite">
+    <p class="guide-when" id="guide-when">불러오는 중</p>
+    <p class="guide-title" id="guide-title" hidden></p>
+    <p class="guide-message" id="guide-message"></p>
   </section>
 
-  <section class="reco">
-    <p class="reco-title">추천 방문 시간</p>
-    <p class="reco-hours" id="best">—</p>
-    <p class="reco-msg" id="recommendation"></p>
-  </section>
-
-  <section class="hours">
-    <h2 id="hours-title">시간대별 예상 방문량</h2>
-    <p class="hint">막대를 누르면 자세히 보입니다. 색은 그 시간대의 평소 분포와 비교한 결과입니다.</p>
-    <div id="chart" class="chart" role="img" aria-label="시간대별 예상 방문량 그래프"></div>
+  <!-- ADE-49: 시간대별 막대. 높이 = estimated_present, 색 = API level -->
+  <section class="hours" id="hours" aria-labelledby="hours-title">
+    <h2 id="hours-title">시간대별 혼잡도</h2>
+    <div id="chart" class="chart" role="group" aria-label="시간대별 혼잡도 막대"></div>
     <ul class="legend"><li class="quiet">여유</li><li class="normal">보통</li><li class="busy">혼잡</li><li class="none">자료 부족</li></ul>
-    <p class="detail" id="detail">시간대를 선택하세요.</p>
-    <details>
-      <summary>표로 보기</summary>
-      <div class="table-wrap"><table>
-        <thead><tr><th>시간</th><th id="metric-col">예상 방문량</th><th>단계</th><th>평소 대비</th><th>근거</th></tr></thead>
-        <tbody id="hourly"></tbody>
-      </table></div>
-    </details>
-  </section>
-
-  <section class="actual-box">
-    <h2>선택한 날짜의 실제 집계</h2>
-    <p id="actual">불러오는 중</p>
-    <p class="hint" id="actual-note"></p>
+    <p class="detail" id="detail" aria-live="polite">막대를 누르면 그 시간대 상태가 보입니다.</p>
+    <p class="basis" id="basis">막대 높이는 과거 자료로 추정한 체류 인원입니다. 정확한 실시간 인원이나 좌석 점유율이 아닙니다.</p>
   </section>
 
   <footer>
     <p id="updated"></p>
-    <p id="reference"></p>
     <p id="hours-note"></p>
-    <p>휴관일과 실제 운영시간은 도서관 공지를 확인하세요.</p>
   </footer>
 </main>
 </body>
