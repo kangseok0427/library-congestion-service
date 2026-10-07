@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.cloud_admin import CloudAdmin
-from backend.cloud_storage import Supabase
+from backend.neon_storage import Neon
 from backend.cloud_versions import CloudProvider, CloudVersions
 from backend.library_hours import KST
 from library_etl.versions import VersionError
@@ -18,7 +18,8 @@ from tests.test_admin_api_v2 import make_excel
 
 class MemoryStorage:
     """Network test double; transaction SQL itself is exercised with PostgreSQL."""
-    url='https://project.supabase.co'
+    mode='neon-direct'
+    url='https://storage.neon.tech'
     upload_bucket='library-uploads'
     def __init__(self):
         self.tables={'library_sessions':[], 'library_uploads':[], 'library_versions':[],
@@ -27,7 +28,7 @@ class MemoryStorage:
         self.fail_put=False
         self.fail_cleanup=False
         self.lease=None
-        self.user={'id':str(uuid4()),'app_metadata':{'library_admin':True}}
+        self.account={'id':str(uuid4()),'role':'admin'}
 
     def rows(self,table,query=''):
         rows=[dict(r) for r in self.tables[table]]
@@ -51,15 +52,12 @@ class MemoryStorage:
         matched=self.rows(table,query)
         self.tables[table]=[r for r in self.tables[table] if r not in matched]
 
-    def request(self,method,path,**kwargs):
-        if path.startswith('/auth/v1/token'):
-            if kwargs['json']['password']!='correct':
-                raise VersionError('bad','UNAUTHORIZED',401)
-            return httpx.Response(200,json={'access_token':'synthetic-token','expires_in':3600,'user':self.user})
-        if path=='/auth/v1/user': return httpx.Response(200,json=self.user)
-        if path.startswith('/auth/v1/logout'): return httpx.Response(204)
-        if '/upload/sign/' in path: return httpx.Response(200,json={'url':path.replace('/storage/v1','')+'?token=signed'})
-        raise AssertionError(path)
+    def login(self,email,password):
+        if password!='correct': raise VersionError('bad','UNAUTHORIZED',401)
+        return {'access_token':'synthetic-token','expires_in':3600,'user':self.account}
+    def user(self,token): return self.account
+    def logout(self,token): pass
+    def sign_upload(self,path,size): return self.url+'/'+self.upload_bucket+'/'+path+'?signed=1'
 
     def download(self,path,limit=100*1024*1024):
         value=self.objects[path]
@@ -130,9 +128,9 @@ def test_cloud_permissions_logout_and_roles(cloud):
     assert client.get('/api/v1/admin/versions').status_code==401
     bad=client.post('/api/v1/admin/session',json={'username':'admin@example.com','password':'wrong'})
     assert bad.json()['error']['code']=='INVALID_CREDENTIALS'
-    storage.user['app_metadata']={'library_admin':False}
+    storage.account['role']='user'
     assert client.post('/api/v1/admin/session',json={'username':'admin@example.com','password':'correct'}).status_code==401
-    storage.user['app_metadata']={'library_admin':True}
+    storage.account['role']='admin'
     login(client)
     old_cookie=client.cookies.get('library_admin_session')
     assert client.delete('/api/v1/admin/session').content==b''
@@ -147,7 +145,7 @@ def test_direct_upload_publish_and_visitor_no_local_records(cloud,tmp_path):
     source=tmp_path/'records.xlsx'; make_excel(source)
     content=source.read_bytes()
     signed=client.post('/api/v1/admin/uploads/sign',json={'filename':source.name,'size':len(content)}).json()
-    assert signed['upload_url'].startswith(storage.url+'/storage/v1/object/upload/sign/library-uploads/')
+    assert signed['upload_url'].startswith(storage.url+'/library-uploads/')
     assert 'synthetic-token' not in json.dumps(signed)
     job=storage.tables['library_uploads'][0]
     storage.objects[job['object_path']]=content
@@ -174,7 +172,7 @@ def test_size_owner_and_csrf_checks(cloud):
 
 def make_job(storage,content):
     id=str(uuid4());path='uploads/'+id+'.xlsx'
-    job={'id':id,'user_id':storage.user['id'],'object_path':path,'source_name':'records.xlsx','byte_size':len(content)}
+    job={'id':id,'user_id':storage.account['id'],'object_path':path,'source_name':'records.xlsx','byte_size':len(content)}
     storage.insert('library_uploads',job);storage.objects[path]=content
     return storage.tables['library_uploads'][-1]
 
@@ -210,21 +208,3 @@ def test_retired_cleanup_failure_blocks_fifth_candidate(cloud,tmp_path):
     assert len(storage.tables['library_versions'])==5
     with pytest.raises(VersionError): versions.publish(make_job(storage,source.read_bytes()))
     assert len(storage.tables['library_versions'])==5
-
-
-def test_rest_credentials_errors_and_storage_limits(monkeypatch):
-    monkeypatch.setenv('SUPABASE_URL','https://project.supabase.co')
-    monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY','server-secret')
-    monkeypatch.setenv('SUPABASE_ANON_KEY','anon-key')
-    def handle(request):
-        if request.url.path.startswith('/auth/'):
-            assert request.headers['apikey']=='anon-key'
-            assert 'authorization' not in request.headers
-            return httpx.Response(400,json={'msg':'invalid'})
-        assert request.headers['authorization']=='Bearer server-secret'
-        return httpx.Response(200,content=b'x'*11)
-    storage=Supabase(httpx.Client(transport=httpx.MockTransport(handle)))
-    with pytest.raises(VersionError) as exc: storage.download('uploads/x.xlsx',limit=10)
-    assert exc.value.status_code==413
-    with pytest.raises(VersionError) as exc: storage.request('POST','/auth/v1/token',auth='')
-    assert exc.value.code=='UNAUTHORIZED'

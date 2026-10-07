@@ -65,7 +65,7 @@ const httpApi = {
     } catch (error) {
       if (error.status !== 404) throw error;
     }
-    if (mode && mode.mode === 'supabase-direct') {
+    if (mode && mode.mode === 'neon-direct') {
       let uploadId = cloudUploads.get(file);
       if (!uploadId) {
         const signed = await httpRequest('POST', '/api/v1/admin/uploads/sign', {

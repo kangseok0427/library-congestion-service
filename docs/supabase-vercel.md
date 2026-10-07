@@ -1,3 +1,5 @@
+> 이 문서는 이전 Supabase 구성의 기록입니다. 현재 운영은 [Neon · Vercel 안내](neon-vercel.md)를 따릅니다.
+
 # Supabase · Vercel 전환
 
 관리자와 이용자 화면, FastAPI는 Vercel에서 제공하고 로그인과 영구 저장은
