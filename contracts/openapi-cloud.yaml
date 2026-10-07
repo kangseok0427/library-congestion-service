@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Library admin cloud transport extension
   version: 3.0.0
-  description: Adds direct Storage upload to v2. Existing login/version/rollback response shapes remain unchanged. Supabase login uses an administrator email in username. Before the first upload the cloud version list permits null active_version_id and an empty versions array.
+  description: Adds direct Storage upload to v2. Existing login/version/rollback response shapes remain unchanged. Neon login uses an administrator email in username. Before the first upload the cloud version list permits null active_version_id and an empty versions array.
 paths:
   /api/v1/admin/upload-mode:
     get:
@@ -15,7 +15,7 @@ paths:
                 type: object
                 required: [mode, max_upload_bytes]
                 properties:
-                  mode: {type: string, enum: [supabase-direct]}
+                  mode: {type: string, enum: [neon-direct]}
                   max_upload_bytes: {type: integer, enum: [10485760]}
   /api/v1/admin/uploads/sign:
     post:
@@ -32,7 +32,7 @@ paths:
                 size: {type: integer, minimum: 1, maximum: 10485760}
       responses:
         '200':
-          description: One private, non-overwriting upload URL; never a service key
+          description: One private PUT URL, valid for 300 seconds and bound to the declared Content-Length and XLSX Content-Type. A URL can be reused until expiry; publishing the same upload_id replays the committed result. Never a service secret.
           content:
             application/json:
               schema:

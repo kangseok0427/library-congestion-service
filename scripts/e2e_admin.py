@@ -220,7 +220,7 @@ def cloud_flow(page, url):
         if path=='api/v1/admin/versions':
             return reply(route,fixture('admin-versions-four.json'))
         if path=='api/v1/admin/upload-mode':
-            return reply(route,{'mode':'supabase-direct','max_upload_bytes':10485760})
+            return reply(route,{'mode':'neon-direct','max_upload_bytes':10485760})
         if path=='api/v1/admin/uploads/sign':
             counts['sign']+=1
             assert request.post_data_json=={'filename':'big.xlsx','size':6*1024*1024}

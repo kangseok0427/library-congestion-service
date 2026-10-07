@@ -100,13 +100,12 @@ python -m scripts.e2e --records data/processed/records.json --date 2026-09-10
 공식 갱신 경로는 관리자 웹에서 Excel을 업로드하는 방식으로 전환합니다.
 설치형 업로더 패키지와 빌드 도구는 제거했습니다. 공용 `library_etl` 전처리는 보존합니다.
 [관리자 업로드 운영 안내](docs/admin-upload.md)에 전환 단계와 검증 조건을 정리했습니다.
-로그인·업로드·버전·롤백의 API v2는 계약이 고정된 상태이며 ADE-46/47 구현 및
-ADE-50 통합 검증 전에는 운영 가능한 화면으로 안내하지 않습니다.
+로그인·업로드·버전·롤백의 API v2는 계약이 고정된 상태입니다.
 
 기존 `/api/v1/admin/records` 인증 설정과 서버 API는 호환을 위해 유지합니다.
 이 경로는 새 관리자 웹의 계약이 아니며, 폐기 시점과 비밀값 정리는 ADE-50에서 확인합니다.
-# Supabase · Vercel 운영 전환
+## Neon · Vercel 운영 전환
 
-클라우드 실행 진입점은 `app.py`이며 관리자 인증·영구 파일 저장은 Supabase,
-웹·Python API 처리는 Vercel을 사용합니다. [최초 설정 및 데이터 이관](docs/supabase-vercel.md)을
+클라우드 실행 진입점은 `app.py`이며 관리자 인증·영구 파일 저장은 Neon,
+웹·Python API 처리는 Vercel을 사용합니다. [최초 설정 및 데이터 이관](docs/neon-vercel.md)을
 먼저 읽으세요. 실제 클라우드 프로젝트 설정과 실파일 확인 전에는 운영 전환 완료가 아닙니다.

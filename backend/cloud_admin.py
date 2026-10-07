@@ -1,4 +1,4 @@
-"""Same-origin admin API using Supabase Auth and signed direct uploads."""
+"""Same-origin admin API using managed Auth and signed direct uploads."""
 import hashlib
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlparse
@@ -7,6 +7,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from library_etl.versions import VersionError
+from backend.neon_storage import is_admin
 
 COOKIE = 'library_admin_session'
 XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -25,8 +26,8 @@ class CloudAdmin:
                     '&expires_at=gt.'+quote(datetime.now(timezone.utc).isoformat(),safe=''))
         if not rows:
             raise VersionError('관리자 로그인이 필요합니다.','UNAUTHORIZED',401)
-        user = self.storage.request('GET','/auth/v1/user',auth=token).json()
-        if user.get('app_metadata',{}).get('library_admin') is not True or user.get('id')!=rows[0]['user_id']:
+        user = self.storage.user(token)
+        if not is_admin(user) or user.get('id')!=rows[0]['user_id']:
             raise VersionError('관리자 권한이 필요합니다.','UNAUTHORIZED',401)
         return user
 
@@ -79,15 +80,13 @@ class CloudAdmin:
             if set(body)!={'username','password'} or any(not isinstance(body[k],str) or not body[k] for k in body):
                 raise VersionError('이메일과 비밀번호를 입력하세요.','INVALID_REQUEST',400)
             try:
-                response = await run_in_threadpool(self.storage.request,'POST','/auth/v1/token?grant_type=password',auth='',
-                      json={'email':body['username'],'password':body['password']})
-                result=response.json()
+                result = await run_in_threadpool(self.storage.login,body['username'],body['password'])
             except VersionError as exc:
                 if exc.code=='UNAUTHORIZED':
                     raise VersionError('이메일 또는 비밀번호를 확인하세요.','INVALID_CREDENTIALS',401) from exc
                 raise
             user=result.get('user',{})
-            if user.get('app_metadata',{}).get('library_admin') is not True:
+            if not is_admin(user):
                 raise VersionError('관리자 계정이 아닙니다.','INVALID_CREDENTIALS',401)
             token=result['access_token']
             ttl=min(int(result['expires_in']),8*3600)
@@ -113,9 +112,9 @@ class CloudAdmin:
             self.user(request)
             token=request.cookies[COOKIE]
             self.storage.delete('library_sessions','token_hash=eq.'+hashlib.sha256(token.encode()).hexdigest())
-            # Our own shared session is invalidated even while Auth JWT remains valid.
+            # Invalidate our shared session before the upstream session.
             try:
-                self.storage.request('POST','/auth/v1/logout?scope=local',auth=token)
+                self.storage.logout(token)
             except VersionError:
                 pass
             response=Response(status_code=204)
@@ -125,7 +124,7 @@ class CloudAdmin:
         @app.get('/api/v1/admin/upload-mode')
         def upload_mode(request: Request):
             self.user(request)
-            return {'mode':'supabase-direct','max_upload_bytes':10*1024*1024}
+            return {'mode':self.storage.mode,'max_upload_bytes':10*1024*1024}
 
         @app.post('/api/v1/admin/uploads/sign')
         async def sign(request: Request):
@@ -145,13 +144,7 @@ class CloudAdmin:
             path='uploads/'+identifier+'.xlsx'
             await run_in_threadpool(self.storage.insert,'library_uploads',{'id':identifier,'user_id':user['id'],
                 'object_path':path,'source_name':body['filename'],'byte_size':body['size']})
-            response=await run_in_threadpool(self.storage.request,'POST','/storage/v1/object/upload/sign/'+
-                quote(self.storage.upload_bucket,safe='')+'/'+path,json={})
-            signed=response.json()
-            relative=signed['url']
-            url=self.storage.url + (relative if relative.startswith('/storage/v1/') else '/storage/v1'+relative)
-            if urlparse(url).netloc!=urlparse(self.storage.url).netloc:
-                raise VersionError('업로드 주소를 확인하세요.','PUBLISH_FAILED',503)
+            url=await run_in_threadpool(self.storage.sign_upload,path,body['size'])
             return {'upload_id':identifier,'upload_url':url}
 
         @app.post('/api/v1/admin/uploads/publish')

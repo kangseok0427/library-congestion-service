@@ -1,9 +1,9 @@
-"""Vercel entrypoint: all persistent state lives in Supabase."""
+"""Vercel entrypoint: all persistent state lives in Neon."""
 from backend.app import create_app
-from backend.cloud_storage import Supabase
+from backend.neon_storage import Neon
 from backend.cloud_versions import CloudVersions, CloudProvider
 from backend.cloud_admin import CloudAdmin
 
-storage = Supabase()
+storage = Neon()
 versions = CloudVersions(storage)
 app = create_app(provider=CloudProvider(versions), admin_backend=CloudAdmin(storage, versions))
