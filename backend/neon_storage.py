@@ -114,7 +114,7 @@ class Neon:
     def delete(self, table, query):
         identifier = self.table(table)
         where, order, params = self.predicate(table, query)
-        if not params or order:
+        if not params or order.as_string():
             raise ValueError('Deletion needs filters')
         self.query(sql.SQL('DELETE FROM {}').format(identifier) + where, params)
 

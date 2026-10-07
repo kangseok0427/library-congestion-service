@@ -42,6 +42,10 @@ def test_sql_values_are_parameters_and_identifiers_are_allowlisted():
     with pytest.raises(ValueError): storage.rows('neon_auth.user')
     with pytest.raises(ValueError): storage.rows('library_sessions', 'secret=eq.x')
     with pytest.raises(ValueError): storage.delete('library_versions', '')
+    storage.delete('library_sessions', 'expires_at=lt.2026-10-07T00%3A00%3A00Z')
+    assert calls[-1][0].startswith('DELETE FROM "library"."library_sessions"')
+    assert calls[-1][1] == ['2026-10-07T00:00:00Z']
+    with pytest.raises(ValueError): storage.delete('library_versions', 'id=eq.x&order=id.desc')
     with pytest.raises(ValueError): storage.rpc('arbitrary_function')
 
 
