@@ -15,3 +15,6 @@ test-results/
 playwright-report/
 build/
 dist/
+*.versions/
+admin-sessions.json
+admin-sessions.tmp

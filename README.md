@@ -77,8 +77,14 @@ Excel 갱신 시에는 위 `library_etl refresh`를 사용합니다. 부분 날�
 - `GET /api/v1/health`: 서버 상태 확인
 - `GET /api/v1/patterns`: 일별·시간대별·요일별·요일/시간별·월별 기본 통계
 
-통계와 API는 공통 `records.json`을 직접 사용합니다. 별도 CSV·SQLite 저장소나
+통계와 API는 공통 `records.json`을 사용합니다. 통계용 CSV·SQLite 저장소나
 `pandas`/`numpy` 실행 의존성은 사용하지 않습니다.
+ADE-45는 활성 records.json, 최초 정상본을 포함한 버전 JSON 최대 4개,
+JSON 메타데이터·복구 기록을 사용합니다. 정상 초기 파일은 첫 버전 관리 호출에서 등록되며
+메타데이터와 복구 기록의 트랜잭션 ID·세대·게시 의도를 대조하고 최종 확정을 기준으로 복구합니다.
+복구 필수 기록 유실·혼합 상태와 확정 여부를 알 수 없는 이전 형식은 거부합니다. 새 후보를 포함한 버전 파일은
+일시적으로 최대 5개이며, 잔여 삭제가 실패하면 추가 게시를 거부합니다. 이 물리 초과 정책은 팀장 승인 사항입니다. [서버 게시·롤백 연결과 복구](docs/server-json-versions.md)를 참고합니다.
+ADE-44 검증 계약 확정과 ADE-46 관리자 API 연결·ADE-50 운영 통합은 별도 작업입니다.
 
 ```sh
 python -m pytest -q
@@ -89,7 +95,13 @@ python -m scripts.e2e --records data/processed/records.json --date 2026-09-10
 
 [구현·인터페이스·인수인계](docs/architecture.md) / [Git 협업](docs/git-workflow.md)
 
-도서관 PC용 Excel 변환·전송 프로그램: [ADE-37 Windows 안내](docs/windows-uploader.md).
+## 관리자 웹 업로드 전환 (Week 4)
 
-운영자 업로드 API는 `POST /api/v1/admin/records`이며 `ADMIN_UPLOAD_TOKEN` 환경변수의
-Bearer 토큰을 요구합니다. 검증된 전체 records 배열만 운영 파일에 원자적으로 반영합니다.
+공식 갱신 경로는 관리자 웹에서 Excel을 업로드하는 방식으로 전환합니다.
+설치형 업로더 패키지와 빌드 도구는 제거했습니다. 공용 `library_etl` 전처리는 보존합니다.
+[관리자 업로드 운영 안내](docs/admin-upload.md)에 전환 단계와 검증 조건을 정리했습니다.
+로그인·업로드·버전·롤백의 API v2는 계약이 고정된 상태이며 ADE-46/47 구현 및
+ADE-50 통합 검증 전에는 운영 가능한 화면으로 안내하지 않습니다.
+
+기존 `/api/v1/admin/records` 인증 설정과 서버 API는 호환을 위해 유지합니다.
+이 경로는 새 관리자 웹의 계약이 아니며, 폐기 시점과 비밀값 정리는 ADE-50에서 확인합니다.
