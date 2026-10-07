@@ -214,10 +214,16 @@ $('upload-form').addEventListener('submit', async event => {
   try {
     const result = await adminApi.upload(file);
     const v = result.version;
-    const warnings = result.validation && result.validation.warnings ? result.validation.warnings : [];
+    const validation = result.validation || {};
+    const reported = validation.warnings || [];
+    // Older completed upload jobs can replay notices from before this policy.
+    const internalCodes = new Set(['HOURLY_TOTAL_MISMATCH', 'PARTIAL_DATE_UNCONFIRMED']);
+    const warnings = reported.filter(w => !internalCodes.has(w.code));
+    const warningCount = reported.length === warnings.length
+      ? Math.max(warnings.length, Number(validation.warning_count) || 0) : warnings.length;
     const text = `게시했습니다. ${v.source_name}의 ${numberKo(v.record_count)}건이 지금 이용자 화면에 반영됩니다.`
-      + (warnings.length ? ` 확인할 경고 ${warnings.length}건이 있습니다.` : '');
-    setStatus('upload-status', warnings.length ? 'warn' : 'ok', text, warnings.map(warningLine));
+      + (warningCount ? ` 확인할 경고 ${warningCount}건이 있습니다.` : '');
+    setStatus('upload-status', warningCount ? 'warn' : 'ok', text, warnings.map(warningLine));
     resetSelection();
     setStatus('versions-status', '', ''); // 직전 되돌리기 결과는 더 이상 현재 상태가 아닙니다.
     await loadVersions({ keepStatus: true });

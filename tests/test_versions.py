@@ -42,7 +42,7 @@ def test_publish_rotate_restart_and_rollback_api(store, tmp_path):
     for value in range(1, 6):
         result = upload(store, tmp_path, value)
         ids.append(result['version']['id'])
-        assert result['validation']['warning_count'] == 4
+        assert result['validation'] == {'warning_count': 0, 'warnings': []}
         assert result['version']['source_name'] == '합성자료.xlsx'
         body = client.get('/api/v1/stats?date=2026-09-10').json()
         assert body['hourly_total_in'] == 12 * (2 * value + 1)

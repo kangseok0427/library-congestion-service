@@ -59,6 +59,9 @@ def forecast(present, target, weeks=4, policy=DEFAULT_HOURS):
     cutoff = target - timedelta(weeks=weeks)
     history = [(parse_date(day), hour, value) for (day, hour), (value, _) in present.items()
                if value is not None and cutoff <= parse_date(day) < target]
+    # Compare all bars against one distribution. Comparing each hourly mean to
+    # its own hourly history makes even the daily peak look merely "normal".
+    comparison_pool = [value for _, _, value in history]
     result = {}
     for hour in policy.hours(target):
         pool = [v for d, h, v in history if h == hour]
@@ -70,7 +73,9 @@ def forecast(present, target, weeks=4, policy=DEFAULT_HOURS):
         else:
             values, basis = [], 'insufficient_samples'
         estimate = round(mean(values)) if values else None
-        score, level = midrank_score(estimate, pool) if values else (None, None)
+        score, level = midrank_score(estimate, comparison_pool) if values else (None, None)
+        if estimate == 0:
+            score, level = 0.0, 'quiet'
         # The forecast is the same-weekday baseline itself, so the rate is 0 when it exists.
         baseline = round(mean(same), 2) if basis == 'same_weekday_same_hour' else None
         result[hour] = dict(estimated_present=estimate, level=level, score=score,

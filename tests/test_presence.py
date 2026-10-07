@@ -138,3 +138,20 @@ def test_equal_in_out_at_11_keeps_the_rest_of_the_day_available():
     assert [h['estimated_present'] for h in today['hourly']] == [8, 16, 16] + list(range(24, 89, 8))
     assert all(h['level'] is not None for h in today['hourly'])
     assert (today['recommendation']['best_start_hour'], today['recommendation']['best_end_hour']) == (9, 11)
+
+
+def test_hourly_levels_use_one_reference_even_with_one_historical_day():
+    present = observed(day_records(TUE - timedelta(weeks=1), [(5, 0)] * 12))
+    result = forecast(present, TUE)
+    assert [result[h]['estimated_present'] for h in HOURS] == list(range(5, 61, 5))
+    assert [result[h]['level'] for h in HOURS] == ['quiet'] * 4 + ['normal'] * 4 + ['busy'] * 4
+    assert all(result[h]['sample_count'] == 1 for h in HOURS)
+    # Future observations never change the common comparison distribution.
+    present.update(observed(day_records(TUE + timedelta(days=1), [(999, 0)] * 12)))
+    assert forecast(present, TUE) == result
+
+
+def test_zero_presence_is_quiet_and_constant_positive_presence_is_normal():
+    for n, expected in ((0, 'quiet'), (10, 'normal')):
+        present = observed(day_records(TUE - timedelta(weeks=1), [(n, 0)] + [(0, 0)] * 11))
+        assert {r['level'] for r in forecast(present, TUE).values()} == {expected}

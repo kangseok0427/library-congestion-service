@@ -1,7 +1,7 @@
 """
 T04 혼잡도 판정 기준 (ADE-8)
 
-기준: 과거 동일 시간대 추정 체류 인원 분포에서의 midrank 백분위 점수 (ADE-40)
+기준: 최근 운영 시간대 전체 추정 체류 인원 분포에서의 midrank 백분위 점수
   - 35 이하 → 여유 (quiet)
   - 36 ~ 70 → 보통 (normal)
   - 71 이상  → 혼잡 (busy)
@@ -25,9 +25,9 @@ LABELS: dict[str, str] = {
 
 # 각 단계의 안내 문구
 DESCRIPTIONS: dict[str, str] = {
-    'quiet': '과거 동일 시간대보다 추정 체류 인원이 적을 것으로 예상됩니다.',
-    'normal': '과거 동일 시간대와 비슷한 추정 체류 인원이 예상됩니다.',
-    'busy': '과거 동일 시간대보다 추정 체류 인원이 많을 것으로 예상됩니다.',
+    'quiet': '최근 운영 시간대 전체와 비교해 추정 체류 인원이 적을 것으로 예상됩니다.',
+    'normal': '최근 운영 시간대 전체와 비교해 추정 체류 인원이 중간 수준으로 예상됩니다.',
+    'busy': '최근 운영 시간대 전체와 비교해 추정 체류 인원이 많을 것으로 예상됩니다.',
 }
 
 
@@ -49,7 +49,7 @@ def midrank_score(value: float | int, distribution: list) -> tuple[float, str]:
 
     Args:
         value:        판정할 값 (예: 예상 방문자 수)
-        distribution: 비교 기준 분포 (과거 동일 시간대 관측값 목록, 비어 있으면 안 됨)
+        distribution: 비교 기준 분포 (예측 화면은 최근 운영 시간대 전체, 비어 있으면 안 됨)
 
     Returns:
         (score, level): 백분위 점수(소수점 1자리)와 혼잡도 단계 키
@@ -79,7 +79,7 @@ def description(level: str) -> str:
 def criteria_info() -> dict:
     """혼잡도 판정 기준 요약 (API /meta 등에서 활용)."""
     return {
-        'basis': '과거 동일 시간대 추정 체류 인원 분포의 midrank 백분위',
+        'basis': '최근 운영 시간대 전체 추정 체류 인원 분포의 midrank 백분위',
         'note': '추정 체류 인원은 누적 IN − 누적 OUT 추정값이며 실시간 인원이나 좌석 점유율이 아닙니다.',
         'thresholds': {
             'quiet': f'백분위 {THRESHOLDS["quiet"]:.0f} 이하',

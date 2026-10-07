@@ -87,3 +87,37 @@ def test_auth_clients_do_not_share_cookies_and_errors_hide_secrets(monkeypatch):
         assert 'private-provider-error' not in str(exc.value)
     assert [r.headers['cookie'] for r in requests] == [AUTH_COOKIE + '=one', AUTH_COOKIE + '=two']
     assert all(r.headers['origin'] == 'https://app.example.com' for r in requests)
+
+
+def test_website_credentials_are_checked_before_server_only_provider_login(monkeypatch):
+    import hashlib
+    salt = '01' * 16
+    digest = hashlib.pbkdf2_hmac('sha256', b'website-password', bytes.fromhex(salt), 600000).hex()
+    values = {'ADMIN_LOGIN_ID': 'admin', 'ADMIN_LOGIN_PASSWORD_HASH': f'pbkdf2_sha256$600000${salt}${digest}',
+              'NEON_ADMIN_EMAIL': 'provider@example.com', 'NEON_ADMIN_PASSWORD': 'provider-secret'}
+    for key, value in values.items(): monkeypatch.setenv(key, value)
+    storage = Neon()
+    calls = []
+    def request(method, path, **kw):
+        calls.append((path, kw))
+        if path == '/sign-in/email':
+            return httpx.Response(200, headers={'set-cookie': AUTH_COOKIE + '=managed-token; Secure; HttpOnly'},
+                                  request=httpx.Request('POST', 'https://auth.example.com'))
+        return httpx.Response(200, json={'user': {'id': 'managed-user', 'role': 'admin'},
+            'session': {'expiresAt': (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()}})
+    storage.auth_request = request
+    for username, password in [('admin', 'wrong'), ('provider@example.com', 'provider-secret'),
+                               ('다른아이디', 'website-password')]:
+        with pytest.raises(VersionError) as exc: storage.login(username, password)
+        assert exc.value.code == 'UNAUTHORIZED'
+    assert not calls
+    result = storage.login('admin', 'website-password')
+    assert calls[0][1]['body'] == {'email': 'provider@example.com', 'password': 'provider-secret'}
+    assert result['access_token'] == 'managed-token' and 'provider-secret' not in str(result)
+    monkeypatch.delenv('NEON_ADMIN_PASSWORD')
+    with pytest.raises(VersionError) as exc: storage.login('admin', 'website-password')
+    assert exc.value.status_code == 503
+    monkeypatch.setenv('NEON_ADMIN_PASSWORD', 'provider-secret')
+    monkeypatch.setenv('ADMIN_LOGIN_PASSWORD_HASH', 'malformed')
+    with pytest.raises(VersionError) as exc: storage.login('admin', 'website-password')
+    assert exc.value.status_code == 503

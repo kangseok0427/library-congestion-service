@@ -1,5 +1,7 @@
 """Neon Postgres, managed Auth and private S3 boundary; secrets stay server-side."""
 import os
+import hashlib
+import hmac
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlparse
 from uuid import UUID
@@ -202,6 +204,27 @@ class Neon:
         return response
 
     def login(self, email, password):
+        # Optional website credentials map to a server-only managed Auth account.
+        # The browser never receives the provider password or chooses that account.
+        names = ('ADMIN_LOGIN_ID', 'ADMIN_LOGIN_PASSWORD_HASH', 'NEON_ADMIN_EMAIL', 'NEON_ADMIN_PASSWORD')
+        configured = [os.environ.get(name, '') for name in names]
+        if any(configured):
+            if not all(configured):
+                raise VersionError('클라우드 인증 설정이 필요합니다.', 'PUBLISH_FAILED', 503)
+            login_id, encoded, provider_email, provider_password = configured
+            try:
+                algorithm, iterations, salt, expected = encoded.split('$')
+                if algorithm != 'pbkdf2_sha256' or iterations != '600000' or len(salt) != 32 or len(expected) != 64:
+                    raise ValueError('Invalid password hash')
+                expected_bytes = bytes.fromhex(expected)
+                actual = hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(salt), 600000)
+            except (ValueError, TypeError) as exc:
+                raise VersionError('클라우드 인증 설정이 필요합니다.', 'PUBLISH_FAILED', 503) from exc
+            valid_password = hmac.compare_digest(actual, expected_bytes)
+            valid_id = hmac.compare_digest(email.encode(), login_id.encode())
+            if not (valid_password and valid_id):
+                raise VersionError('관리자 인증을 확인하세요.', 'UNAUTHORIZED', 401)
+            email, password = provider_email, provider_password
         response = self.auth_request('POST', '/sign-in/email', body={'email': email, 'password': password})
         token = response.cookies.get(AUTH_COOKIE, '')
         if not token:

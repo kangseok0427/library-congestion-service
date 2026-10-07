@@ -199,6 +199,17 @@ def test_failed_publish_preserves_active_and_retention_rolls_back(cloud,tmp_path
     with pytest.raises(VersionError): versions.rollback(first)
 
 
+def test_reference_notices_do_not_require_action_and_partial_flags_survive(cloud, tmp_path):
+    storage, versions, _ = cloud
+    source = tmp_path / 'records.xlsx'; make_excel(source)
+    job = make_job(storage, source.read_bytes())
+    result = versions.publish(job)
+    assert result['validation'] == {'warning_count': 0, 'warnings': []}
+    records, _ = versions.records()
+    assert any(row['is_partial'] for row in records)
+    assert versions.publish(job) == result
+
+
 def test_retired_cleanup_failure_blocks_fifth_candidate(cloud,tmp_path):
     storage,versions,_=cloud
     source=tmp_path/'records.xlsx';make_excel(source)
