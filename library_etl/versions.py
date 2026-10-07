@@ -433,11 +433,9 @@ class VersionStore:
                 merged = merge_records(existing, incoming)
             except DataError as exc:
                 raise VersionError(str(exc), 'INVALID_EXCEL', 422) from exc
-            warnings = [dict(code=w['code'], message=w.get('message',
-                            '원본 전체 합계와 시간대 합계가 다릅니다. 원본값을 보존했습니다.'),
-                            **({'row': w['row']} if 'row' in w else {})) for w in report['warnings']]
             # Build all fallible response fields before commit.
-            result = dict(status='published', validation=dict(warning_count=len(warnings), warnings=warnings))
+            from .validation import public_validation
+            result = dict(status='published', validation=public_validation(report))
             result['version'] = self._publish(state, merged, report['source_file'])
             return result
         return self._run(operation)

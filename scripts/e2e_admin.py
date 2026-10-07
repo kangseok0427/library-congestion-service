@@ -165,6 +165,17 @@ def http_flow(page, url):
         if path == '/api/v1/admin/versions' and request.method == 'GET':
             return reply(route, 200, fixture('admin-versions-four.json'))
         if path == '/api/v1/admin/uploads' and request.method == 'POST':
+            if b'filename="reference.xlsx"' in request.post_data_buffer:
+                body = fixture('admin-upload-success.json')
+                body['validation'] = {'warning_count': 3627, 'warnings':
+                    [{'code': 'HOURLY_TOTAL_MISMATCH', 'message': '원본 합계 참고'}] * 99
+                    + [{'code': 'PARTIAL_DATE_UNCONFIRMED', 'message': '최신 날짜 참고'}]}
+                return reply(route, 200, body)
+            if b'filename="actionable.xlsx"' in request.post_data_buffer:
+                body = fixture('admin-upload-success.json')
+                body['validation'] = {'warning_count': 150, 'warnings':
+                    [{'code': 'NEEDS_REVIEW', 'message': '확인하세요.'}] * 100}
+                return reply(route, 200, body)
             return reply(route, 422, fixture('admin-upload-invalid.json'))
         if path.startswith('/api/v1/admin/versions/') and path.endswith('/rollback') and request.method == 'POST':
             return reply(route, 200, fixture('admin-rollback-success.json'))
@@ -183,6 +194,19 @@ def http_flow(page, url):
     page.locator('#file').set_input_files(xlsx('records.xlsx'))
     page.get_by_role('button', name='검증 후 게시').click()
     expect(page.locator('#upload-status li')).to_have_text(['12행 IN_09: 숫자가 아닌 값입니다.'])
+
+    # Old completed jobs can replay 100 capped reference notices: keep success quiet.
+    page.locator('#file').set_input_files(xlsx('reference.xlsx'))
+    page.get_by_role('button', name='검증 후 게시').click()
+    expect(page.locator('#upload-status p')).to_have_class('notice ok')
+    expect(page.locator('#upload-status')).not_to_contain_text('확인할 경고')
+    expect(page.locator('#upload-status li')).to_have_count(0)
+    # Actionable warnings remain visible with the total, rather than the 100-row cap.
+    page.locator('#file').set_input_files(xlsx('actionable.xlsx'))
+    page.get_by_role('button', name='검증 후 게시').click()
+    expect(page.locator('#upload-status')).to_contain_text('확인할 경고 150건')
+    expect(page.locator('#upload-status p')).to_have_class('notice warn')
+    expect(page.locator('#upload-status li')).to_have_count(100)
 
     page.locator('#version-list .slot').nth(1).get_by_role('button').click()
     page.get_by_role('button', name='되돌리기', exact=True).click()

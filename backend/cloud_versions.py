@@ -14,6 +14,7 @@ from backend.service import LibraryService
 from library_etl.pipeline import preprocess
 from library_etl.refresh import merge_records
 from library_etl.versions import VersionError
+from library_etl.validation import public_validation
 
 
 class CloudVersions:
@@ -97,11 +98,9 @@ class CloudVersions:
                 if len(payload)>45_000_000:
                     raise VersionError('처리 결과가 저장 한도를 초과했습니다.','FILE_TOO_LARGE',413)
                 self.storage.put(object_path,payload)
-            warnings = [{'code':w['code'], 'message':w.get('message','원본 합계와 시간대 합계가 다릅니다.'),
-                         **({'row':w['row']} if 'row' in w else {})} for w in report['warnings'][:100]]
             result = {'status':'published','version':{'id':identifier,'created_at':now.isoformat(),
                       'source_name':job['source_name'],'record_count':len(merged),'is_active':True},
-                      'validation':{'warning_count':len(report['warnings']),'warnings':warnings}}
+                      'validation':public_validation(report)}
             self.storage.rpc('library_commit', {'p_lease':lease,'p_version':identifier,
                 'p_count':len(merged),'p_upload':job['id'],'p_result':result})
         except Exception as exc:

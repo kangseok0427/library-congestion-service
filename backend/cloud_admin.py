@@ -78,12 +78,12 @@ class CloudAdmin:
             self.write_origin(request)
             body = await self.body(request)
             if set(body)!={'username','password'} or any(not isinstance(body[k],str) or not body[k] for k in body):
-                raise VersionError('이메일과 비밀번호를 입력하세요.','INVALID_REQUEST',400)
+                raise VersionError('아이디와 비밀번호를 입력하세요.','INVALID_REQUEST',400)
             try:
                 result = await run_in_threadpool(self.storage.login,body['username'],body['password'])
             except VersionError as exc:
                 if exc.code=='UNAUTHORIZED':
-                    raise VersionError('이메일 또는 비밀번호를 확인하세요.','INVALID_CREDENTIALS',401) from exc
+                    raise VersionError('아이디 또는 비밀번호를 확인하세요.','INVALID_CREDENTIALS',401) from exc
                 raise
             user=result.get('user',{})
             if not is_admin(user):
