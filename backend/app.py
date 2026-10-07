@@ -58,7 +58,7 @@ class FileProvider:
 
 
 def create_app(provider=None, clock=now_kst, upload_token=None,
-               max_upload_bytes=MAX_UPLOAD_BYTES):
+               max_upload_bytes=MAX_UPLOAD_BYTES, admin_backend=None):
     path = os.environ.get('LIBRARY_RECORDS')
     provider = provider or FileProvider(path or ROOT / 'data/sample/records.json', sample=not bool(path))
     publisher = RecordsPublisher(provider.path) if hasattr(provider, 'path') else None
@@ -68,6 +68,8 @@ def create_app(provider=None, clock=now_kst, upload_token=None,
     session_cookie = 'library_admin_session'
     upload_limit = min(max_upload_bytes, 10 * 1024 * 1024)
     app = FastAPI(title='Library congestion v1')
+    if admin_backend is not None:
+        admin_backend.install(app)
 
     def error(code, message, status):
         return JSONResponse(status_code=status, content={'error': {'code': code, 'message': message, 'details': []}})

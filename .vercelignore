@@ -1,0 +1,7 @@
+.git
+.venv
+tests
+test-results
+data
+docs
+upload

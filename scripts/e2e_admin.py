@@ -207,6 +207,53 @@ def http_flow(page, url):
     return seen
 
 
+def cloud_flow(page, url):
+    """A >4.5 MB file bypasses the function; a lost response reuses upload_id."""
+    counts = {'sign':0,'storage':0,'publish':0}
+    upload_id='9b222234-aaa1-4ac0-8001-0123456789ab'
+    def reply(route,body,status=200):
+        route.fulfill(status=status,content_type='application/json',body=json.dumps(body))
+    def handle(route,request):
+        path=request.url.split('://',1)[1].split('/',1)[1]
+        if path=='api/v1/admin/session':
+            return reply(route,fixture('admin-session-success.json'))
+        if path=='api/v1/admin/versions':
+            return reply(route,fixture('admin-versions-four.json'))
+        if path=='api/v1/admin/upload-mode':
+            return reply(route,{'mode':'supabase-direct','max_upload_bytes':10485760})
+        if path=='api/v1/admin/uploads/sign':
+            counts['sign']+=1
+            assert request.post_data_json=={'filename':'big.xlsx','size':6*1024*1024}
+            assert 'cookie' not in request.post_data
+            return reply(route,{'upload_id':upload_id,'upload_url':'https://storage.example/upload?token=signed'})
+        if path=='api/v1/admin/uploads/publish':
+            counts['publish']+=1
+            assert request.post_data_json=={'upload_id':upload_id}
+            assert len(request.post_data)<100
+            if counts['publish']==1:
+                return reply(route,{'error':{'code':'PUBLISH_FAILED','message':'response lost','details':[]}},503)
+            return reply(route,fixture('admin-upload-success.json'))
+        raise AssertionError(path)
+    def storage(route,request):
+        if request.method=='OPTIONS':
+            return route.fulfill(status=204,headers={'Access-Control-Allow-Origin':url,
+                'Access-Control-Allow-Methods':'PUT','Access-Control-Allow-Headers':'content-type'})
+        counts['storage']+=1
+        assert request.method=='PUT' and len(request.post_data_buffer)==6*1024*1024
+        assert 'cookie' not in request.headers and 'authorization' not in request.headers
+        route.fulfill(status=200,headers={'Access-Control-Allow-Origin':url},body='{}')
+    page.route('**/api/v1/admin/**',handle)
+    page.route('https://storage.example/**',storage)
+    page.goto(url+'/frontend/admin.html')
+    expect(page.locator('#console-view')).to_be_visible()
+    page.locator('#file').set_input_files(xlsx('big.xlsx',6*1024*1024))
+    page.get_by_role('button',name='검증 후 게시').click()
+    expect(page.locator('#upload-status p')).to_have_class('notice error')
+    page.get_by_role('button',name='검증 후 게시').click()
+    expect(page.locator('#upload-status')).to_contain_text('게시했습니다')
+    assert counts=={'sign':1,'storage':1,'publish':2},counts
+
+
 def main():
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
@@ -226,7 +273,7 @@ def main():
         with sync_playwright() as p:
             browser = p.chromium.launch()
             errors = []
-            for flow in (mock_flow, http_flow):
+            for flow in (mock_flow, http_flow, cloud_flow):
                 page = browser.new_page(viewport={'width': 1280, 'height': 900}, timezone_id='America/Los_Angeles')
                 page.on('pageerror', lambda e: errors.append(str(e)))
                 flow(page, url)
@@ -240,6 +287,7 @@ def main():
             '409 publish in progress', 'publish rotates oldest out and activates newest',
             'rollback cancel and confirm', '401 returns to login', 'logout',
             '390px no page overflow', 'http transport uses frozen paths, JSON login, multipart file, encoded version id',
+            'cloud 6 MB direct Storage upload, no credentials sent cross-origin, idempotent publish retry',
         ]}, ensure_ascii=False))
     finally:
         server.terminate()

@@ -52,11 +52,49 @@ async function httpRequest(method, path, { json, form } = {}) {
   return data;
 }
 
+const cloudUploads = new WeakMap(); // Reuse the same upload ID after a lost publish response.
 const httpApi = {
   getSession: () => httpRequest('GET', '/api/v1/admin/session'),
   login: (username, password) => httpRequest('POST', '/api/v1/admin/session', { json: { username, password } }),
   logout: () => httpRequest('DELETE', '/api/v1/admin/session'),
-  upload: file => {
+  upload: async file => {
+    // Local/PythonAnywhere servers retain the multipart transport.
+    let mode;
+    try {
+      mode = await httpRequest('GET', '/api/v1/admin/upload-mode');
+    } catch (error) {
+      if (error.status !== 404) throw error;
+    }
+    if (mode && mode.mode === 'supabase-direct') {
+      let uploadId = cloudUploads.get(file);
+      if (!uploadId) {
+        const signed = await httpRequest('POST', '/api/v1/admin/uploads/sign', {
+          json: {filename: file.name, size: file.size},
+        });
+        let response;
+        try {
+          response = await fetch(signed.upload_url, {
+            method: 'PUT', body: file,
+            headers: {'Content-Type': XLSX_TYPE}, credentials: 'omit',
+          });
+        } catch (error) {
+          throw new AdminApiError('NETWORK');
+        }
+        if (!response.ok) throw new AdminApiError('PUBLISH_FAILED', response.status);
+        uploadId = signed.upload_id;
+        cloudUploads.set(file, uploadId);
+      }
+      try {
+        const result = await httpRequest('POST', '/api/v1/admin/uploads/publish', {
+          json: {upload_id: uploadId},
+        });
+        cloudUploads.delete(file);
+        return result;
+      } catch (error) {
+        if (error.status === 400 || error.status === 422) cloudUploads.delete(file);
+        throw error;
+      }
+    }
     const form = new FormData();
     form.append('file', file, file.name);
     return httpRequest('POST', '/api/v1/admin/uploads', { form });
