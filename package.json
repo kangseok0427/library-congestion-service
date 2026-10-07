@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "scripts": {"test:cloud-sql": "node scripts/test_cloud_sql.mjs"},
+  "devDependencies": {"@electric-sql/pglite": "0.5.8"}
+}

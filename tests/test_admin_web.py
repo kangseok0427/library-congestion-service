@@ -45,6 +45,8 @@ def test_every_contract_error_code_has_korean_admin_message():
 def test_transport_uses_only_frozen_admin_paths():
     spec = yaml.safe_load((CONTRACTS / "openapi-v2.yaml").read_text(encoding="utf-8"))
     frozen = {path for path in spec["paths"] if path.startswith("/api/v1/admin/")}
+    cloud = yaml.safe_load((CONTRACTS / "openapi-cloud.yaml").read_text(encoding="utf-8"))
+    frozen |= set(cloud["paths"])
     source = text("admin-api.js")
     used = set(re.findall(r"'(/api/v1/admin/[^'`]*)'", source))
     used |= {p.replace("${encodeURIComponent(versionId)}", "{version_id}")

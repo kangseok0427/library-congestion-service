@@ -12,6 +12,11 @@ jobs:
           python-version: '3.12'
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run test:cloud-sql
       - run: python -m playwright install --with-deps chromium
       - run: python -m scripts.e2e
       - run: python -m scripts.e2e_admin
