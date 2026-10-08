@@ -280,6 +280,11 @@ def cloud_flow(page, url):
             return reply(route,fixture('admin-session-success.json'))
         if path=='api/v1/admin/versions':
             return reply(route,fixture('admin-versions-four.json'))
+        if path=='api/v1/admin/traffic':
+            return reply(route,{'date':'2026-10-08','today_visitors':0,'total_visitors':0,
+                                'today_page_views':0,'total_page_views':0})
+        if path=='api/v1/admin/closures':
+            return reply(route,{'closed_dates':[], 'closed_weekdays':[0]})
         if path=='api/v1/admin/upload-mode':
             return reply(route,{'mode':'neon-direct','max_upload_bytes':10485760})
         if path=='api/v1/admin/uploads/sign':
