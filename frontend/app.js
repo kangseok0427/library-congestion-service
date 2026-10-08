@@ -140,9 +140,11 @@ async function load() {
     const metric = metricOf(data.hourly);
     if (data.data_status === 'historical_statistics') {
       const years = data.statistics?.source_years || [];
-      const sources = years.length ? `${years.join('·')}년의 같은 월·일 기록을 사용했습니다.`
+      const matched = data.statistics?.matched_dates;
+      const sources = matched?.length ? `같은 월·일의 과거 기록 ${matched.length}일 중 계산 가능한 시간대만 표시합니다.`
+        : years.length ? `${years.join('·')}년의 같은 월·일 기록을 사용했습니다.`
         : data.hourly.some(h => h[metric.key] != null) ? '사용한 연도 정보가 제공되지 않았습니다.' : '과거 같은 월·일의 유효 기록이 없습니다.';
-      $('basis').textContent = `막대 높이는 과거 같은 날짜에 남아 있던 사람 수의 평균 통계입니다. ${sources} 실시간 인원이나 미래 인원 예측이 아닙니다.`;
+      $('basis').textContent = `막대 높이는 과거 같은 날짜의 추정 체류 인원 평균 통계입니다. ${sources} 실시간 인원이나 미래 인원 예측이 아닙니다.`;
     } else {
       $('basis').textContent = metric.basis;
     }

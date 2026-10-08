@@ -55,6 +55,42 @@ def test_no_matching_calendar_date_is_not_filled_with_other_dates():
     assert '예측' not in body['recommendation']['message']
 
 
+def test_missing_later_hours_do_not_make_eleven_to_one_a_quiet_recommendation():
+    # 11/12 are the lowest available pair, but every hour from 13 is unknown.
+    rows = day_records('2021-10-08', [(10, 0), (0, 5), (0, 4), (0, 0), (0, 2)]
+                       + [(0, 0)] * 7)
+    body = result(rows)
+    hours = {h['hour']: h for h in body['hourly']}
+    assert hours[11]['estimated_present'] == hours[12]['estimated_present'] == 1
+    assert all(hours[h]['estimated_present'] is None for h in range(13, 21))
+    assert body['recommendation'] == {
+        'best_start_hour': None, 'best_end_hour': None,
+        'message': '일부 시간대의 통계를 계산할 수 없어 여유로운 시간을 비교하기 어렵습니다.',
+    }
+
+
+def test_past_missing_observation_does_not_block_complete_remaining_period():
+    service = LibraryService(records('2021-10-08', 1))
+    # Recommendation consumes per-hour summaries: an unavailable past sample
+    # must not prevent comparing a fully observed remaining period.
+    service.present['2021-10-08', 9] = (None, 'insufficient_data')
+    body = service.today(now=datetime(2026, 10, 8, 19, tzinfo=KST))
+    assert body['hourly'][0]['estimated_present'] is None
+    assert body['hourly'][-1]['level'] == 'busy'
+    assert body['recommendation']['best_start_hour'] == 19
+    assert body['recommendation']['best_end_hour'] == 21
+    assert '남은 시간대 중' in body['recommendation']['message']
+    assert '여유' not in body['recommendation']['message']
+
+
+def test_future_recommendation_compares_whole_selected_day():
+    service = LibraryService(records('2021-10-08', 1))
+    body = service.today(now=datetime(2026, 10, 7, 19, tzinfo=KST),
+                         target=date(2026, 10, 8))
+    assert body['recommendation']['best_start_hour'] == 9
+    assert '조회한 시간대 중' in body['recommendation']['message']
+
+
 def test_fractional_mean_is_preserved_and_legacy_week_setting_has_no_effect():
     rows = records('2021-10-08', 1) + records('2025-10-08', 2)
     now = datetime(2026, 10, 8, 8, tzinfo=KST)
