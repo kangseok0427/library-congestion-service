@@ -67,16 +67,26 @@ class LibraryService:
         level = active['level'] if active else None
         minimum_hour = now.hour + (1 if now.minute or now.second or now.microsecond else 0) if target == now.date() else self.policy.bounds(target)[0]
         reco = recommendation(hourly, minimum_hour, key='estimated_present')
-        if reco['best_start_hour'] is None:
+        eligible = [h for h in hourly if h['start_hour'] >= minimum_hour]
+        # A low observed pair is not the day's quietest period when other
+        # eligible periods are unknown. Past gaps do not affect today's choice.
+        incomplete = any(h['estimated_present'] is None for h in eligible)
+        if incomplete and any(h['estimated_present'] is not None for h in eligible):
+            reco = dict(best_start_hour=None, best_end_hour=None,
+                        message='일부 시간대의 통계를 계산할 수 없어 여유로운 시간을 비교하기 어렵습니다.')
+        elif reco['best_start_hour'] is None:
             reco['message'] = '안내할 연속 2시간의 과거 같은 날짜 통계가 없습니다.'
         else:
-            reco['message'] = (f"{reco['best_start_hour']}시~{reco['best_end_hour']}시가 "
-                               '과거 같은 날짜 통계에서 상대적으로 여유로웠습니다. 방문 시 참고하세요.')
+            scope = '남은 시간대' if target == now.date() else '조회한 시간대'
+            reco['message'] = (f"과거 같은 날짜 통계에서 {scope} 중 "
+                               f"{reco['best_start_hour']}시~{reco['best_end_hour']}시의 평균 인원이 "
+                               '가장 적었습니다. 방문 시 참고하세요.')
         if closed:
             reco['message'] = '휴관일에는 방문 시간을 추천하지 않습니다.'
         operating = self.policy.info(target)
         operating.update(is_closed=closed, available_hours=tuple(h['hour'] for h in hourly))
         source_dates = sorted({day for h in hourly for day in h['source_dates']})
+        matched_dates = sorted({day for h in hourly for day in h['matched_source_dates']})
         data_dates = sorted({r['date'] for r in self.records})
         return dict(date=target.isoformat(), data_status='closed' if closed else 'historical_statistics', reference_time=now.isoformat(),
                     operating=operating,
@@ -86,6 +96,7 @@ class LibraryService:
                     updated_at=self.updated_at, is_sample=self.sample,
                     basis='보유한 모든 과거 연도의 같은 월·일·시간대 추정 체류 인원(누적 IN − OUT) 평균 통계',
                     statistics=dict(method='same_month_day_hour_mean', month=target.month, day=target.day,
+                                    matched_dates=matched_dates, matched_days=len(matched_dates),
                                     source_dates=source_dates, source_years=sorted({parse_date(d).year for d in source_dates}),
                                     sample_days=len(source_dates),
                                     available_data_start=data_dates[0] if data_dates else None,

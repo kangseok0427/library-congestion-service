@@ -12,12 +12,17 @@ from .library_hours import DEFAULT_HOURS
 
 
 def summarize(present, rows, target, policy=DEFAULT_HOURS):
+    # Resolve the source calendar dates before quality filtering. Otherwise a
+    # present-but-unusable date disappears and looks like a failed date match.
+    dates = {r['date']: parse_date(r['date']) for r in rows}
+    matching_days = sorted(day for day, parsed in dates.items()
+                           if parsed.year < target.year
+                           and (parsed.month, parsed.day) == (target.month, target.day))
+    matching = set(matching_days)
+    closed_days = {r['date'] for r in rows if r.get('is_closed_day') is True}
     history = defaultdict(list)
     for (day, hour), (value, status) in present.items():
-        observed_day = parse_date(day)
-        if (value is not None and status == 'valid'
-                and observed_day.year < target.year
-                and (observed_day.month, observed_day.day) == (target.month, target.day)):
+        if day in matching and value is not None and status == 'valid':
             history[hour].append((day, value))
     comparison_pool = [value for samples in history.values() for _, value in samples]
     entries = {(r['date'], r['hour']): r for r in rows}
@@ -25,6 +30,18 @@ def summarize(present, rows, target, policy=DEFAULT_HOURS):
     for hour in policy.hours(target):
         samples = sorted(history[hour])
         dates = [day for day, _ in samples]
+        excluded = []
+        for day in matching_days:
+            if day in dates:
+                continue
+            source_day = parse_date(day)
+            if day in closed_days or policy.is_closed(source_day):
+                reason = 'closed'
+            elif hour not in policy.hours(source_day):
+                reason = 'outside_operating_hours'
+            else:
+                reason = present.get((day, hour), (None, 'missing_hour'))[1]
+            excluded.append(dict(date=day, reason=reason))
         value = round(mean(v for _, v in samples), 2) if samples else None
         incoming = [entries[day, hour]['in_count'] for day in dates]
         score, level = midrank_score(value, comparison_pool) if samples else (None, None)
@@ -40,6 +57,7 @@ def summarize(present, rows, target, policy=DEFAULT_HOURS):
             label=LEVELS.get(level, '자료 부족'),
             calculation_basis='same_month_day_hour_mean' if samples else 'insufficient_samples',
             sample_count=len(samples), source_dates=dates,
+            matched_source_dates=matching_days, excluded_samples=excluded,
             source_years=[parse_date(day).year for day in dates],
             quality_status='historical_statistics' if samples else 'insufficient_samples',
         ))

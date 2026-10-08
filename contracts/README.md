@@ -13,6 +13,12 @@ FastAPI endpoints are ready.
   responses include per-hour `sample_count`, `source_dates`, `source_years` and
   top-level `statistics`. Legacy field names remain for compatibility;
   `expected_visitors` is the observed IN mean and bars use `estimated_present`.
+  `matched_source_dates` and `excluded_samples` distinguish absent dates from
+  matched dates whose cumulative values cannot be calculated. Top-level
+  `statistics.matched_dates` counts original matching dates, while `source_dates`
+  lists dates actually used. Do not infer that a discarded hour was empty.
+  Recommendations require complete coverage of the hours being compared; a
+  surviving morning fragment must not become a claim that mornings are quieter.
 
 - Base path: `/api/v1`
 - JSON field names: `snake_case`

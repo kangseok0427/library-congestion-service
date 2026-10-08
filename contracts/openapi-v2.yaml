@@ -453,6 +453,24 @@ components:
           items:
             type: string
             format: date
+        matched_source_dates:
+          type: array
+          description: Original same-month/day dates before quality or historical opening-hours exclusions.
+          items:
+            type: string
+            format: date
+        excluded_samples:
+          type: array
+          description: Matched source dates excluded from this hour and their reasons; never replaced with another date or zero.
+          items:
+            type: object
+            required: [date, reason]
+            properties:
+              date:
+                type: string
+                format: date
+              reason:
+                type: string
         source_years:
           type: array
           items:
