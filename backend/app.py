@@ -235,6 +235,7 @@ def create_app(provider=None, clock=now_kst, upload_token=None,
         now = clock().astimezone(KST)
         return dict(library_name='용산꿈나무도서관', available_hours=DEFAULT_HOURS.hours(now.date()), levels=LEVELS,
                     date_window=date_window(now),
+                    date_availability=provider.get().date_availability(now),
                     hours_note='평일 09:00~21:00 · 주말 09:00~17:00 · 매주 월요일 및 등록된 휴관일 제외. 시간 라벨은 현장 확인 전 임시 기준입니다.')
 
     @app.get('/api/v1/congestion/today')

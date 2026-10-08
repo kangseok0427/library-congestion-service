@@ -19,6 +19,15 @@ FastAPI endpoints are ready.
   lists dates actually used. Do not infer that a discarded hour was empty.
   Recommendations require complete coverage of the hours being compared; a
   surviving morning fragment must not become a claim that mornings are quieter.
+  Negative computed balances are corrected with `max(0, previous + IN - OUT)`
+  after summing both gates. Corrected zero values remain in the average and the
+  next hour continues from zero. Raw IN/OUT are preserved. `corrected_source_dates`
+  and `corrected_sample_count` identify the included corrected observations.
+  `GET /api/v1/meta` adds `date_availability.available_dates` / `skipped_dates`
+  for the existing today-to-7-days range. The visitor page skips open dates with
+  no same-calendar-date prior-year source and updates the selected date and hint.
+  Closure notices remain selectable. Date-specific API responses retain the
+  explicitly requested date; they never silently return a different date.
 
 - Base path: `/api/v1`
 - JSON field names: `snake_case`

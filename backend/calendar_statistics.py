@@ -1,7 +1,8 @@
 """Observed same-month/day statistics across all available prior years.
 
 There is no recency window, weekday fallback or future headcount forecast.
-Only valid cumulative observations participate; missing samples remain null.
+Valid cumulative observations, including balances corrected to zero, participate;
+missing samples remain null.
 """
 from collections import defaultdict
 from statistics import mean
@@ -22,7 +23,7 @@ def summarize(present, rows, target, policy=DEFAULT_HOURS):
     closed_days = {r['date'] for r in rows if r.get('is_closed_day') is True}
     history = defaultdict(list)
     for (day, hour), (value, status) in present.items():
-        if day in matching and value is not None and status == 'valid':
+        if day in matching and value is not None and status in ('valid', 'negative_corrected'):
             history[hour].append((day, value))
     comparison_pool = [value for samples in history.values() for _, value in samples]
     entries = {(r['date'], r['hour']): r for r in rows}
@@ -30,6 +31,7 @@ def summarize(present, rows, target, policy=DEFAULT_HOURS):
     for hour in policy.hours(target):
         samples = sorted(history[hour])
         dates = [day for day, _ in samples]
+        corrected_dates = [day for day in dates if present[day, hour][1] == 'negative_corrected']
         excluded = []
         for day in matching_days:
             if day in dates:
@@ -57,6 +59,7 @@ def summarize(present, rows, target, policy=DEFAULT_HOURS):
             label=LEVELS.get(level, '자료 부족'),
             calculation_basis='same_month_day_hour_mean' if samples else 'insufficient_samples',
             sample_count=len(samples), source_dates=dates,
+            corrected_source_dates=corrected_dates, corrected_sample_count=len(corrected_dates),
             matched_source_dates=matching_days, excluded_samples=excluded,
             source_years=[parse_date(day).year for day in dates],
             quality_status='historical_statistics' if samples else 'insufficient_samples',

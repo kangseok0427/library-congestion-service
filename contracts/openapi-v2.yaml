@@ -438,7 +438,7 @@ components:
         estimated_present:
           type: [number, 'null']
           minimum: 0
-          description: Mean of valid cumulative IN minus OUT for the same month, day and hour across all prior years.
+          description: Mean of cumulative IN minus OUT for the same month, day and hour across all prior years. Negative computed balances are floored at zero and included; subsequent hours continue from that corrected value.
         level:
           $ref: '#/components/schemas/CongestionLevel'
         label:
@@ -475,6 +475,15 @@ components:
           type: array
           items:
             type: integer
+        corrected_source_dates:
+          type: array
+          description: Included source dates whose balance was floored at zero at this hour.
+          items:
+            type: string
+            format: date
+        corrected_sample_count:
+          type: integer
+          minimum: 0
       additionalProperties: true
 
     CongestionResponse:

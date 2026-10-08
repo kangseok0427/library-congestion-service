@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from statistics import mean
 
 from .domain import LEVELS, DataError, aggregate, parse_date, validate_records, nullable_sum
@@ -16,6 +16,9 @@ class LibraryService:
         self.policy = policy
         self.service_rows = policy.filter_rows(self.rows)
         self.closed_dates = {r['date'] for r in self.rows if r.get('is_closed_day') is True}
+        self.source_years_by_calendar_date = defaultdict(set)
+        for day in {r['date'] for r in self.rows}:
+            self.source_years_by_calendar_date[day[5:]].add(int(day[:4]))
         self.present = presence.observed(self.records, policy)
         self.updated_at = updated_at or datetime.now(KST).isoformat()
         self.weeks = weeks
@@ -23,6 +26,19 @@ class LibraryService:
 
     def is_closed(self, day):
         return self.policy.is_closed(day) or day.isoformat() in self.closed_dates
+
+    def date_availability(self, now):
+        """Skip open dates with no prior-year source; preserve closure notices."""
+        today = now.astimezone(KST).date()
+        available, skipped = [], []
+        for offset in range(8):
+            day = today + timedelta(days=offset)
+            years = self.source_years_by_calendar_date.get(day.isoformat()[5:], ())
+            if self.is_closed(day) or any(year < day.year for year in years):
+                available.append(day.isoformat())
+            else:
+                skipped.append(day.isoformat())
+        return dict(available_dates=available, skipped_dates=skipped)
 
     def stats(self, day, now=None):
         target = parse_date(day)
@@ -96,6 +112,7 @@ class LibraryService:
                     updated_at=self.updated_at, is_sample=self.sample,
                     basis='보유한 모든 과거 연도의 같은 월·일·시간대 추정 체류 인원(누적 IN − OUT) 평균 통계',
                     statistics=dict(method='same_month_day_hour_mean', month=target.month, day=target.day,
+                                    negative_balance_correction='floor_at_zero_continue',
                                     matched_dates=matched_dates, matched_days=len(matched_dates),
                                     source_dates=source_dates, source_years=sorted({parse_date(d).year for d in source_dates}),
                                     sample_days=len(source_dates),
