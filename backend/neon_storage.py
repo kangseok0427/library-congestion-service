@@ -26,6 +26,9 @@ FUNCTIONS = {
     'library_commit': ('p_lease', 'p_version', 'p_count', 'p_upload', 'p_result'),
     'library_rollback': ('p_version',), 'library_abort': ('p_lease',),
     'library_gc_candidates': (), 'library_list': (),
+    'library_closure_list': (), 'library_closure_set': ('p_date', 'p_reason'),
+    'library_closure_remove': ('p_date',), 'library_visit': ('p_visitor', 'p_date'),
+    'library_traffic': ('p_date',),
 }
 XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 AUTH_COOKIE = '__Secure-neon-auth.session_token'

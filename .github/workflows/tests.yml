@@ -20,3 +20,9 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: python -m scripts.e2e
       - run: python -m scripts.e2e_admin
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-verification
+          path: test-results/*.png
+          retention-days: 3

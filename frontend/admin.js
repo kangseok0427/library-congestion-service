@@ -95,6 +95,7 @@ function showConsole() {
   $('logout').hidden = false;
   $('upload-title').focus();
   loadVersions();
+  loadAdminOperations();
 }
 
 // 401은 어느 작업에서 나와도 로그인 화면으로 돌아갑니다.

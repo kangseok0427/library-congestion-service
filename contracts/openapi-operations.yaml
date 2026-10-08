@@ -1,0 +1,92 @@
+openapi: 3.0.3
+info:
+  title: Library website usage and closure settings
+  version: 1.0.0
+paths:
+  /api/v1/visit:
+    post:
+      description: One page opening. Server-issued HttpOnly visitor cookie deduplicates visitors; KST defines the day. No IP/email is retained. Date/chart refreshes do not call this endpoint.
+      responses:
+        '204': {description: Counted, or known crawler skipped}
+        '403': {description: Cross-origin request rejected}
+        '503': {description: Counting unavailable; visitor statistics remain usable}
+  /api/v1/admin/traffic:
+    get:
+      security: [{adminSession: []}]
+      responses:
+        '200':
+          description: Website usage since feature activation, browser cookie based
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date, today_visitors, total_visitors, today_page_views, total_page_views]
+                properties:
+                  date: {type: string, format: date}
+                  today_visitors: {type: integer, minimum: 0}
+                  total_visitors: {type: integer, minimum: 0}
+                  today_page_views: {type: integer, minimum: 0}
+                  total_page_views: {type: integer, minimum: 0}
+        '401': {description: Administrator session required}
+  /api/v1/admin/closures:
+    get:
+      security: [{adminSession: []}]
+      responses:
+        '200':
+          description: Full date-specific closures plus weekly closure rules; Monday is 0
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [closed_dates, closed_weekdays]
+                properties:
+                  closed_weekdays: {type: array, items: {type: integer, minimum: 0, maximum: 6}}
+                  closed_dates:
+                    type: array
+                    items:
+                      type: object
+                      required: [date, reason]
+                      properties:
+                        date: {type: string, format: date}
+                        reason: {type: string, maxLength: 80}
+        '401': {description: Administrator session required}
+  /api/v1/admin/closures/{day}:
+    parameters:
+      - {name: day, in: path, required: true, schema: {type: string, format: date}}
+    put:
+      security: [{adminSession: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: {type: string, maxLength: 80, description: Empty string becomes 휴관일}
+      responses:
+        '200':
+          description: Registered/updated and effective on the next visitor query
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date, is_closed, reason]
+                properties:
+                  date: {type: string, format: date}
+                  is_closed: {type: boolean, enum: [true]}
+                  reason: {type: string}
+        '400': {description: Invalid calendar date/body}
+        '401': {description: Administrator session required}
+        '403': {description: Cross-origin request rejected}
+    delete:
+      security: [{adminSession: []}]
+      responses:
+        '204': {description: Unregistered; weekly/source closure rules still apply}
+        '400': {description: Invalid calendar date}
+        '401': {description: Administrator session required}
+        '403': {description: Cross-origin request rejected}
+components:
+  securitySchemes:
+    adminSession: {type: apiKey, in: cookie, name: library_admin_session}

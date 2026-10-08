@@ -66,6 +66,23 @@ def mock_flow(page, url):
     expect(slots.nth(3)).to_contain_text('다음 게시 때 삭제')
     expect(page.get_by_role('button', name='검증 후 게시')).to_be_disabled()
 
+    # New tools use the same administrator session; mock writes stay local.
+    expect(page.locator('#today-visitors')).to_have_text('12')
+    expect(page.locator('#total-visitors')).to_have_text('85')
+    calendar_day = page.locator('.calendar-day:not(.regular)').first
+    day = calendar_day.get_attribute('data-date')
+    calendar_day.click()
+    page.get_by_label('휴관 사유').fill('시설 점검')
+    page.get_by_role('button', name='휴관일 등록', exact=True).click()
+    expect(page.locator('#closure-status')).to_contain_text('휴관일로 저장했습니다')
+    expect(page.locator(f'[data-date="{day}"]')).to_have_class('calendar-day registered')
+    page.get_by_role('button', name='휴관일 해제', exact=True).click()
+    expect(page.locator('#closure-status')).to_contain_text('등록을 해제했습니다')
+    expect(page.locator(f'[data-date="{day}"]')).not_to_have_class('calendar-day registered')
+    page.get_by_role('button', name='다음 달', exact=True).click()
+    expect(page.locator('#closure-selected')).to_have_text('달력에서 날짜를 선택하세요.')
+    expect(page.get_by_role('button', name='휴관일 등록', exact=True)).to_be_disabled()
+
     # Client-side rejection: wrong extension and >10 MB never reach the API.
     page.locator('#file').set_input_files(xlsx('records.csv'))
     expect(page.locator('#upload-status')).to_contain_text('.xlsx 형식의 Excel 파일만')
@@ -164,6 +181,16 @@ def http_flow(page, url):
             return reply(route, 204)
         if path == '/api/v1/admin/versions' and request.method == 'GET':
             return reply(route, 200, fixture('admin-versions-four.json'))
+        if path == '/api/v1/admin/traffic' and request.method == 'GET':
+            return reply(route, 200, {'date':'2026-10-08','today_visitors':3,'total_visitors':7,
+                                     'today_page_views':4,'total_page_views':10})
+        if path == '/api/v1/admin/closures' and request.method == 'GET':
+            return reply(route, 200, {'closed_dates':[], 'closed_weekdays':[0]})
+        if path.startswith('/api/v1/admin/closures/') and request.method == 'PUT':
+            body=json.loads(request.post_data)
+            return reply(route,200,{'date':path.rsplit('/',1)[1],'is_closed':True,'reason':body['reason']})
+        if path.startswith('/api/v1/admin/closures/') and request.method == 'DELETE':
+            return reply(route,204)
         if path == '/api/v1/admin/uploads' and request.method == 'POST':
             if b'filename="reference.xlsx"' in request.post_data_buffer:
                 body = fixture('admin-upload-success.json')
@@ -190,6 +217,16 @@ def http_flow(page, url):
     page.get_by_label('비밀번호').fill('secret')
     page.get_by_role('button', name='로그인').click()
     expect(page.locator('#version-list .slot:not(.empty)')).to_have_count(4)
+
+    expect(page.locator('#today-visitors')).to_have_text('3')
+    calendar_day = page.locator('.calendar-day:not(.regular)').first
+    day = calendar_day.get_attribute('data-date')
+    calendar_day.click()
+    page.get_by_label('휴관 사유').fill('공휴일')
+    page.get_by_role('button', name='휴관일 등록', exact=True).click()
+    expect(page.locator('#closure-status')).to_contain_text('휴관일로 저장했습니다')
+    page.get_by_role('button', name='휴관일 해제', exact=True).click()
+    expect(page.locator('#closure-status')).to_contain_text('등록을 해제했습니다')
 
     page.locator('#file').set_input_files(xlsx('records.xlsx'))
     page.get_by_role('button', name='검증 후 게시').click()
@@ -243,6 +280,11 @@ def cloud_flow(page, url):
             return reply(route,fixture('admin-session-success.json'))
         if path=='api/v1/admin/versions':
             return reply(route,fixture('admin-versions-four.json'))
+        if path=='api/v1/admin/traffic':
+            return reply(route,{'date':'2026-10-08','today_visitors':0,'total_visitors':0,
+                                'today_page_views':0,'total_page_views':0})
+        if path=='api/v1/admin/closures':
+            return reply(route,{'closed_dates':[], 'closed_weekdays':[0]})
         if path=='api/v1/admin/upload-mode':
             return reply(route,{'mode':'neon-direct','max_upload_bytes':10485760})
         if path=='api/v1/admin/uploads/sign':

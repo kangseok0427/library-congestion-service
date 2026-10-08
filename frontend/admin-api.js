@@ -101,6 +101,10 @@ const httpApi = {
   },
   listVersions: () => httpRequest('GET', '/api/v1/admin/versions'),
   rollback: versionId => httpRequest('POST', `/api/v1/admin/versions/${encodeURIComponent(versionId)}/rollback`),
+  traffic: () => httpRequest('GET', '/api/v1/admin/traffic'),
+  closures: () => httpRequest('GET', '/api/v1/admin/closures'),
+  setClosure: (day, reason) => httpRequest('PUT', `/api/v1/admin/closures/${day}`, { json: { reason } }),
+  removeClosure: day => httpRequest('DELETE', `/api/v1/admin/closures/${day}`),
 };
 
 // ---------------------------------------------------------------- Mock 전송
@@ -125,7 +129,7 @@ const MOCK_ERRORS = {
 
 function createMockApi() {
   const cache = new Map();
-  const state = { authenticated: false, versions: null, activeId: null, maxVersions: 4 };
+  const state = { authenticated: false, versions: null, activeId: null, maxVersions: 4, closures: [] };
 
   const wait = () => new Promise(resolve => setTimeout(resolve, MOCK_DELAY_MS));
   const clone = value => JSON.parse(JSON.stringify(value));
@@ -171,6 +175,25 @@ function createMockApi() {
   const markActive = () => state.versions.forEach(v => { v.is_active = v.id === state.activeId; });
 
   return {
+    async traffic() {
+      await wait(); requireSession();
+      return {today_visitors: 12, total_visitors: 85, today_page_views: 30, total_page_views: 210};
+    },
+    async closures() {
+      await wait(); requireSession();
+      return {closed_dates: clone(state.closures), closed_weekdays: [0]};
+    },
+    async setClosure(day, reason) {
+      await wait(); requireSession();
+      state.closures = state.closures.filter(d => d.date !== day);
+      state.closures.push({date: day, reason: reason || '휴관일'});
+      return {date: day, is_closed: true};
+    },
+    async removeClosure(day) {
+      await wait(); requireSession();
+      state.closures = state.closures.filter(d => d.date !== day);
+      return null;
+    },
     async getSession() {
       await wait();
       return state.authenticated ? fixture('admin-session-success.json') : { authenticated: false };
