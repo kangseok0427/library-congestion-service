@@ -100,8 +100,8 @@ def test_forecast_same_weekday_fallback_and_insufficient():
 def test_api_contract_keeps_legacy_fields():
     # visitors are low in the morning but people stay; estimated_present peaks late.
     records = []
-    for weeks in (1, 2, 3):
-        records += day_records(TUE - timedelta(weeks=weeks), [(30, 0)] + [(10, 10)] * 8 + [(1, 20)] * 3,
+    for day in ('2021-09-23', '2022-09-23', '2025-09-23', '2026-09-15'):
+        records += day_records(day, [(30, 0)] + [(10, 10)] * 8 + [(1, 20)] * 3,
                                [(30, 0)] + [(10, 10)] * 11)
     service = LibraryService(records)
     now = datetime(2026, 9, 22, 8, tzinfo=KST)
@@ -130,6 +130,12 @@ def test_equal_in_out_at_11_keeps_the_rest_of_the_day_available():
     for r in records:
         if r['hour'] == 11:
             r['out_count'] = r['in_count']
+    for day in ('2021-09-22', '2022-09-22', '2023-09-22'):
+        history = day_records(day, [(5, 1)] * 12, [(5, 1)] * 12)
+        for r in history:
+            if r['hour'] == 11:
+                r['out_count'] = r['in_count']
+        records += history
     service = LibraryService(records)
     past = service.stats('2026-09-15', now=datetime(2026, 9, 22, 8, tzinfo=KST))['hourly']
     assert [(h['estimated_present'], h['quality_status']) for h in past[:4]] == [

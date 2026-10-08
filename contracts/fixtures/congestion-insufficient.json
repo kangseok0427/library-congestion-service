@@ -1,13 +1,13 @@
 {
   "date": "2026-10-03",
-  "data_status": "forecast",
+  "data_status": "historical_statistics",
   "updated_at": "2026-10-02T09:00:00+09:00",
   "congestion": {
     "level": null,
-    "label": "예측 자료 없음"
+    "label": "통계 자료 없음"
   },
   "recommendation": {
-    "message": "추천할 연속 2시간의 예측 데이터가 없습니다."
+    "message": "안내할 연속 2시간의 과거 같은 날짜 통계가 없습니다."
   },
   "hourly": [
     {

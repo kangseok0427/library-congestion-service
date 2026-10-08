@@ -7,6 +7,13 @@ FastAPI endpoints are ready.
 
 ## Rules
 
+- Visitor results use all prior years with the same month/day/hour and valid
+  cumulative observations. They are historical statistics, not future forecasts.
+  No four-week cutoff or other-date fallback applies. `historical_statistics`
+  responses include per-hour `sample_count`, `source_dates`, `source_years` and
+  top-level `statistics`. Legacy field names remain for compatibility;
+  `expected_visitors` is the observed IN mean and bars use `estimated_present`.
+
 - Base path: `/api/v1`
 - JSON field names: `snake_case`
 - Calendar dates: `YYYY-MM-DD`

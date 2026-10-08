@@ -1,5 +1,13 @@
 # ADE-15 / ADE-16 구현과 인수인계
 
+> **2026-10-08 운영 변경**: 이용자 `/congestion/today`는 이제 최근 N주 예측이 아닌
+> 보유한 모든 과거 연도의 **같은 월·일·시간 통계**를 제공합니다.
+> `backend/calendar_statistics.py`에서 유효 누적 IN - OUT 평균과 공통 색상 기준을
+> 계산하며 다른 날짜 fallback은 없습니다. `statistics`와 시간별 `source_dates`,
+> `source_years`, `sample_count`를 확인할 수 있습니다. 아래 N주 예측·backtest 설명은
+> 이전 구현과 호환용 분석 도구의 이력이며 현재 이용자 막대에는 적용하지 않습니다.
+> 현재 운영 구조·정책은 [Neon/Vercel 운영 안내](neon-vercel.md)를 참고하세요.
+
 > ADE-21 변경: Excel 입력은 T02 파서로 통합했고 T08은 날짜·게이트 병합 후
 > 임시 JSON/rebuild 검증이 끝나면 운영 파일을 한 번 교체합니다.
 > 아래 v1 기준 설명 중 정확히 12필드/정수 OUT 제한은 대체되었습니다.

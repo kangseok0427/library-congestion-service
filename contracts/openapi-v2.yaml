@@ -436,14 +436,27 @@ components:
           minimum: 0
           maximum: 23
         estimated_present:
-          type: [integer, 'null']
+          type: [number, 'null']
           minimum: 0
+          description: Mean of valid cumulative IN minus OUT for the same month, day and hour across all prior years.
         level:
           $ref: '#/components/schemas/CongestionLevel'
         label:
           type: string
         quality_status:
           type: string
+        sample_count:
+          type: integer
+          minimum: 0
+        source_dates:
+          type: array
+          items:
+            type: string
+            format: date
+        source_years:
+          type: array
+          items:
+            type: integer
       additionalProperties: true
 
     CongestionResponse:
@@ -455,7 +468,7 @@ components:
           format: date
         data_status:
           type: string
-          enum: [forecast, partial, pending, closed]
+          enum: [historical_statistics, forecast, partial, pending, closed]
         updated_at:
           type: string
           format: date-time
@@ -479,5 +492,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HourlyCongestion'
+        statistics:
+          type: object
+          description: Same-month/day source dates and years, with no recent-week cutoff or other-date fallback.
+          additionalProperties: true
       additionalProperties: true
 

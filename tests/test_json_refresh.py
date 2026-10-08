@@ -72,7 +72,8 @@ def test_refresh_success_idempotence_history_and_api(active, tmp_path):
     assert after[2]['total_out'] == 1776
     assert rebuild_spy.call_count == 1
     assert Path(rebuild_spy.call_args.args[1]) != path
-    assert client.get('/api/v1/congestion/today?date=2026-09-17').json()['hourly'] != forecast_before
+    # Updating September 10 must not change statistics for September 17.
+    assert client.get('/api/v1/congestion/today?date=2026-09-17').json()['hourly'] == forecast_before
     rows = json.loads(after[0])
     assert len(rows) == len(json.loads(before[0]))
     assert any(r.get('quality_note') == 'retained' for r in rows)
