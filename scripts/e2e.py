@@ -109,23 +109,35 @@ def main():
                     assert path.read_bytes()==saved
                     page.get_by_role('button',name='새로고침').click()
                     assert expect_bars_match_api(page, url, args.date) == refreshed
-                # All 8 dates, real server rules, independent of browser timezone.
+                # All 8 requested dates, including explicit no-source skips,
+                # use the actual selected date and remain independent of timezone.
                 first=date.fromisoformat(args.date)
+                availability=page.request.get(url+'/api/v1/meta').json()['date_availability']
                 expect(page.locator('#date')).to_have_attribute('min',args.date)
                 expect(page.locator('#date')).to_have_attribute('max',(first+timedelta(days=7)).isoformat())
                 for offset in range(8):
                     target=first+timedelta(days=offset)
                     day=target.isoformat()
+                    selected=day
+                    if day in availability['skipped_dates']:
+                        available=availability['available_dates']
+                        selected=next((d for d in available if d>day),available[-1])
+                    selected_date=date.fromisoformat(selected)
+                    result=page.request.get(url+'/api/v1/congestion/today?date='+selected).json()
                     page.locator('#date').fill(day)
                     page.get_by_role('button',name='조회',exact=True).click()
-                    if DEFAULT_HOURS.is_closed(target):
+                    expect(page.locator('#date')).to_have_value(selected)
+                    expect(page.locator('#guide-when')).to_contain_text(f'{selected_date.month}월 {selected_date.day}일')
+                    if selected!=day:
+                        expect(page.locator('#date-hint')).to_contain_text('건너뛰었습니다')
+                    if result['data_status']=='closed':
                         expect(page.locator('#guide')).to_have_attribute('data-state','closed')
                         expect(page.locator('#guide-title')).to_have_text('휴관일')
                         expect(page.locator('#hours')).to_be_hidden()
                         expect(page.locator('#chart .column')).to_have_count(0)
                     else:
                         expect(page.locator('#hours')).to_be_visible()
-                        expect(page.locator('#chart .column')).to_have_count(len(DEFAULT_HOURS.hours(target)))
+                        expect_bars_match_api(page, url, selected)
                         expect(page.locator('#error')).to_be_hidden()
                 for offset in (-1,8):
                     bad=(first+timedelta(days=offset)).isoformat()
@@ -152,7 +164,7 @@ def main():
                 expect(page.locator('#chart .column')).to_have_count(0)
                 browser.close()
             print(json.dumps({'e2e':'PASS','input':'real_records' if args.records else 'synthetic',
-                              'checks':['API to DOM (each bar hour, level, estimated_present)','same calendar date statistics across prior years','no table, actual card or 명 text (ADE-49)','8 KST dates including closed and pending states','past and +8 rejected in UI and API','America/Los_Angeles browser timezone','record replacement updates stats API and bars',
+                              'checks':['API to DOM (each bar hour, level, estimated_present)','same calendar date statistics across prior years','no table, actual card or 명 text (ADE-49)','8 KST dates including explicit missing-date skips and closure notices','past and +8 rejected in UI and API','America/Los_Angeles browser timezone','record replacement updates stats API and bars',
                                         '390px no page overflow','invalid replacement error and stale bar removal']+
                                        (['synthetic XLSX refresh updates API and bars','OUT_11 source value preserved',
                                          'invalid XLSX preserves JSON and bars'] if not args.records else [])},ensure_ascii=False))
