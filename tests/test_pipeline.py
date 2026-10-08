@@ -89,7 +89,7 @@ def test_api_contract_and_errors(records,tmp_path):
     client=TestClient(create_app(FileProvider(path), clock=lambda: datetime(2026,9,11,12,tzinfo=KST)))
     data=client.get('/api/v1/congestion/today?date=2026-09-15').json()
     assert {'date','data_status','reference_time','congestion','recommendation','hourly','updated_at'}<=data.keys()
-    assert len(data['hourly'])==12 and data['data_status']=='forecast'
+    assert len(data['hourly'])==12 and data['data_status']=='historical_statistics'
     assert client.get('/api/v1/meta').json()['levels']['quiet']=='여유'
     for query,code in [('20260914','INVALID_DATE'),('2026-02-30','INVALID_DATE'),('2000-01-01','INVALID_DATE')]:
         response=client.get('/api/v1/stats?date='+query)

@@ -43,9 +43,13 @@ def expected_text(h):
 def check_hours(page, data):
     hourly = data['hourly']
     expect(page.locator('#hours')).to_be_visible()
-    expect(page.locator('#hours-title')).to_have_text('시간대별 혼잡도')
-    expect(page.locator('#basis')).to_contain_text('추정한 체류 인원')
-    expect(page.locator('#basis')).to_contain_text('정확한 실시간 인원이나 좌석 점유율이 아닙니다')
+    expect(page.locator('#hours-title')).to_have_text('시간대별 혼잡도 통계')
+    if data['data_status'] == 'historical_statistics':
+        expect(page.locator('#basis')).to_contain_text('과거 같은 날짜')
+        expect(page.locator('#basis')).to_contain_text('평균 통계')
+    else:
+        expect(page.locator('#basis')).to_contain_text('추정한 체류 인원')
+        expect(page.locator('#basis')).to_contain_text('정확한 실시간 인원이나 좌석 점유율이 아닙니다')
     expect(page.locator('#chart .column')).to_have_count(len(hourly))
     expect(page.locator('#guide-message')).to_have_text(data['recommendation']['message'])
     # ADE-49: no detailed table and no number-centred text in the hours card.
@@ -74,7 +78,8 @@ def check_hours(page, data):
 def main():
     Path('test-results').mkdir(exist_ok=True)
     path = Path('test-results/e2e_present_records.json')
-    rebuild(generate(end=date.fromisoformat(DAY)), path)
+    rebuild(generate(end=date.fromisoformat(DAY)) + generate(end=date(2023, 9, 29))
+            + generate(end=date(2022, 9, 29)), path)
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
     url = f'http://127.0.0.1:{port}'
@@ -139,7 +144,7 @@ def main():
             # 4) response for another date is not shown as the selected date
             state.update(body=load('partial'), status=200)
             page.locator('#date').fill('2026-09-23'); page.get_by_role('button', name='조회', exact=True).click()
-            expect(page.locator('#error')).to_contain_text('선택한 날짜의 예측을 받지 못했습니다')
+            expect(page.locator('#error')).to_contain_text('선택한 날짜의 통계를 받지 못했습니다')
             expect(page.locator('#chart .column')).to_have_count(0)
             checks.append('date mismatch is an error, not stale data')
 
@@ -173,6 +178,7 @@ def main():
             # 7) a response without estimated_present keeps 예상 방문량 wording (no relabelling)
             def legacy(route):
                 body = route.fetch().json()
+                body['data_status'] = 'forecast'
                 for h in body['hourly']:
                     h.pop('estimated_present'); h.pop('calculation_basis'); h.pop('quality_status')
                 route.fulfill(status=200, content_type='application/json', body=json.dumps(body, ensure_ascii=False))

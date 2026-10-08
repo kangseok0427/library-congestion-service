@@ -51,7 +51,9 @@ def expect_bars_match_api(page, url, day):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--records');parser.add_argument('--date',default='2026-09-22');args=parser.parse_args()
-    records=read_records(args.records) if args.records else generate(end=date.fromisoformat(args.date))
+    day = date.fromisoformat(args.date)
+    records=read_records(args.records) if args.records else (
+        generate(end=day) + generate(end=day.replace(year=2023)) + generate(end=day.replace(year=2022)))
     Path('test-results').mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(dir='test-results') as directory:
         path=Path(directory)/'records.json';service=rebuild(records,path)
@@ -150,7 +152,7 @@ def main():
                 expect(page.locator('#chart .column')).to_have_count(0)
                 browser.close()
             print(json.dumps({'e2e':'PASS','input':'real_records' if args.records else 'synthetic',
-                              'checks':['API to DOM (each bar hour, level, estimated_present)','operating-hour forecast bars','no table, actual card or 명 text (ADE-49)','8 KST dates including closed and pending states','past and +8 rejected in UI and API','America/Los_Angeles browser timezone','record replacement updates stats API and bars',
+                              'checks':['API to DOM (each bar hour, level, estimated_present)','same calendar date statistics across prior years','no table, actual card or 명 text (ADE-49)','8 KST dates including closed and pending states','past and +8 rejected in UI and API','America/Los_Angeles browser timezone','record replacement updates stats API and bars',
                                         '390px no page overflow','invalid replacement error and stale bar removal']+
                                        (['synthetic XLSX refresh updates API and bars','OUT_11 source value preserved',
                                          'invalid XLSX preserves JSON and bars'] if not args.records else [])},ensure_ascii=False))

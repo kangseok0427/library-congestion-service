@@ -18,7 +18,9 @@ NOW = datetime(2026, 9, 22, 8, tzinfo=KST)
 
 @pytest.fixture
 def service():
-    return LibraryService(generate(end=date(2026, 9, 29), days=56))
+    return LibraryService(generate(end=date(2026, 9, 29), days=56)
+                          + generate(end=date(2023, 9, 29), days=56)
+                          + generate(end=date(2022, 9, 29), days=56))
 
 
 @pytest.fixture

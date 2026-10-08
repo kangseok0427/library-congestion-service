@@ -22,18 +22,18 @@ def test_existing_normal_snapshot_can_be_rolled_back(tmp_path):
     original = path.read_bytes()
     client = TestClient(create_app(FileProvider(path),
                        clock=lambda: datetime(2026, 9, 10, 12, tzinfo=KST)))
-    old_forecast = client.get('/api/v1/congestion/today?date=2026-09-17').json()['hourly']
+    old_stats = client.get('/api/v1/stats?date=2026-09-10').json()['hourly']
     old_patterns = client.get('/api/v1/patterns').json()
     store = VersionStore(path)
     result = upload(store, tmp_path)
     versions = store.list_versions()['versions']
     assert len(versions) == 2
     assert versions[0]['id'] == result['version']['id']
-    assert client.get('/api/v1/congestion/today?date=2026-09-17').json()['hourly'] != old_forecast
+    assert client.get('/api/v1/stats?date=2026-09-10').json()['hourly'] != old_stats
     assert client.get('/api/v1/patterns').json() != old_patterns
     store.rollback(versions[1]['id'])
     assert json.loads(path.read_bytes()) == json.loads(original)
-    assert client.get('/api/v1/congestion/today?date=2026-09-17').json()['hourly'] == old_forecast
+    assert client.get('/api/v1/stats?date=2026-09-10').json()['hourly'] == old_stats
     assert client.get('/api/v1/patterns').json() == old_patterns
 
 

@@ -1,13 +1,13 @@
 {
   "date": "2026-10-02",
-  "data_status": "forecast",
+  "data_status": "historical_statistics",
   "updated_at": "2026-10-02T09:00:00+09:00",
   "congestion": {
     "level": null,
-    "label": "시간대별 예측 참고"
+    "label": "시간대별 과거 통계 참고"
   },
   "recommendation": {
-    "message": "12시~14시가 과거 추정 체류 인원 기준으로 한산합니다. 실제 운영시간·휴관 여부를 확인한 뒤 방문하세요."
+    "message": "12시~14시가 과거 같은 날짜 통계에서 상대적으로 여유로웠습니다. 방문 시 참고하세요."
   },
   "hourly": [
     {
@@ -15,84 +15,84 @@
       "estimated_present": 14,
       "level": "normal",
       "label": "보통",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 10,
       "estimated_present": 14,
       "level": "normal",
       "label": "보통",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 11,
       "estimated_present": 14,
       "level": "normal",
       "label": "보통",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 12,
       "estimated_present": 6,
       "level": "quiet",
       "label": "여유",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 13,
       "estimated_present": 8,
       "level": "quiet",
       "label": "여유",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 14,
       "estimated_present": 8,
       "level": "quiet",
       "label": "여유",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 15,
       "estimated_present": 8,
       "level": "quiet",
       "label": "여유",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 16,
       "estimated_present": 10,
       "level": "normal",
       "label": "보통",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 17,
       "estimated_present": 25,
       "level": "busy",
       "label": "혼잡",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 18,
       "estimated_present": 17,
       "level": "normal",
       "label": "보통",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 19,
       "estimated_present": 18,
       "level": "busy",
       "label": "혼잡",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     },
     {
       "hour": 20,
       "estimated_present": 14,
       "level": "normal",
       "label": "보통",
-      "quality_status": "forecast"
+      "quality_status": "historical_statistics"
     }
   ]
 }

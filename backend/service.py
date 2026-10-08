@@ -6,6 +6,7 @@ from .domain import LEVELS, DataError, aggregate, parse_date, validate_records, 
 from .prediction import forecast, recommendation, historical, percentile
 from .library_hours import DEFAULT_HOURS, KST, now_kst
 from . import presence
+from .calendar_statistics import summarize
 
 
 class LibraryService:
@@ -61,25 +62,34 @@ class LibraryService:
         now = now.astimezone(KST)
         target = target or now.date()
         closed = self.is_closed(target)
-        # expected_visitors/method keep the legacy IN-based forecast for compatibility; level, score,
-        # sample_count, baseline_avg, difference_rate and the recommendation follow estimated_present (ADE-40).
-        present = presence.forecast(self.present, target, self.weeks, self.policy)
-        hourly = [dict(h, **present[h['hour']]) for h in forecast(self.rows, target, self.weeks, self.policy)]
+        hourly = [] if closed else summarize(self.present, self.rows, target, self.policy)
         active = next((h for h in hourly if h['start_hour'] == now.hour), None) if target == now.date() else None
         level = active['level'] if active else None
         minimum_hour = now.hour + (1 if now.minute or now.second or now.microsecond else 0) if target == now.date() else self.policy.bounds(target)[0]
         reco = recommendation(hourly, minimum_hour, key='estimated_present')
+        if reco['best_start_hour'] is None:
+            reco['message'] = '안내할 연속 2시간의 과거 같은 날짜 통계가 없습니다.'
+        else:
+            reco['message'] = (f"{reco['best_start_hour']}시~{reco['best_end_hour']}시가 "
+                               '과거 같은 날짜 통계에서 상대적으로 여유로웠습니다. 방문 시 참고하세요.')
         if closed:
             reco['message'] = '휴관일에는 방문 시간을 추천하지 않습니다.'
         operating = self.policy.info(target)
         operating.update(is_closed=closed, available_hours=tuple(h['hour'] for h in hourly))
-        return dict(date=target.isoformat(), data_status='closed' if closed else 'forecast', reference_time=now.isoformat(),
+        source_dates = sorted({day for h in hourly for day in h['source_dates']})
+        data_dates = sorted({r['date'] for r in self.records})
+        return dict(date=target.isoformat(), data_status='closed' if closed else 'historical_statistics', reference_time=now.isoformat(),
                     operating=operating,
-                    congestion=dict(level=level, label='휴관일' if closed else LEVELS.get(level, '예측 자료 없음' if active else '시간대별 예측 참고'),
+                    congestion=dict(level=level, label='휴관일' if closed else LEVELS.get(level, '통계 자료 없음' if active else '시간대별 과거 통계 참고'),
                                     score=active['score'] if active else None),
                     recommendation=reco, hourly=hourly,
                     updated_at=self.updated_at, is_sample=self.sample,
-                    basis='과거 유효 자료의 같은 요일·시간대 추정 체류 인원(누적 IN − OUT) 기준')
+                    basis='보유한 모든 과거 연도의 같은 월·일·시간대 추정 체류 인원(누적 IN − OUT) 평균 통계',
+                    statistics=dict(method='same_month_day_hour_mean', month=target.month, day=target.day,
+                                    source_dates=source_dates, source_years=sorted({parse_date(d).year for d in source_dates}),
+                                    sample_days=len(source_dates),
+                                    available_data_start=data_dates[0] if data_dates else None,
+                                    available_data_end=data_dates[-1] if data_dates else None))
 
     def patterns(self):
         daily = defaultdict(list)

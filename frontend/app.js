@@ -118,7 +118,7 @@ async function load() {
     if (current !== generation) return;
     // 다른 날짜의 응답을 선택한 날짜처럼 보여 주지 않습니다.
     if (data.date && data.date !== day) {
-      showError('선택한 날짜의 예측을 받지 못했습니다. 잠시 후 다시 시도하세요.');
+      showError('선택한 날짜의 통계를 받지 못했습니다. 잠시 후 다시 시도하세요.');
       return;
     }
     const reference = data.reference_time || new Date().toISOString();
@@ -138,10 +138,17 @@ async function load() {
     }
 
     const metric = metricOf(data.hourly);
-    $('basis').textContent = metric.basis;
+    if (data.data_status === 'historical_statistics') {
+      const years = data.statistics?.source_years || [];
+      const sources = years.length ? `${years.join('·')}년의 같은 월·일 기록을 사용했습니다.`
+        : data.hourly.some(h => h[metric.key] != null) ? '사용한 연도 정보가 제공되지 않았습니다.' : '과거 같은 월·일의 유효 기록이 없습니다.';
+      $('basis').textContent = `막대 높이는 과거 같은 날짜에 남아 있던 사람 수의 평균 통계입니다. ${sources} 실시간 인원이나 미래 인원 예측이 아닙니다.`;
+    } else {
+      $('basis').textContent = metric.basis;
+    }
     const rows = renderBars(data.hourly, metric, isToday ? kstHour(reference) : null);
     if (!rows.some(d => d.value !== null)) {
-      setGuide('insufficient', when, '자료 부족', message || '이 날짜는 예측에 쓸 자료가 부족합니다.');
+      setGuide('insufficient', when, '자료 부족', message || '이 날짜와 같은 월·일의 과거 기록이 부족합니다.');
     } else {
       setGuide('open', when, '', message);
     }
