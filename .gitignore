@@ -18,3 +18,5 @@ dist/
 *.versions/
 admin-sessions.json
 admin-sessions.tmp
+*.operations.json
+*.operations.json.*.tmp

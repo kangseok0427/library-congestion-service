@@ -42,14 +42,16 @@ def test_every_contract_error_code_has_korean_admin_message():
     assert not missing, f"admin.js has no Korean message for {sorted(missing)}"
 
 
-def test_transport_uses_only_frozen_admin_paths():
+def test_transport_uses_documented_admin_paths():
     spec = yaml.safe_load((CONTRACTS / "openapi-v2.yaml").read_text(encoding="utf-8"))
     frozen = {path for path in spec["paths"] if path.startswith("/api/v1/admin/")}
     cloud = yaml.safe_load((CONTRACTS / "openapi-cloud.yaml").read_text(encoding="utf-8"))
     frozen |= set(cloud["paths"])
+    operations = yaml.safe_load((CONTRACTS / "openapi-operations.yaml").read_text(encoding="utf-8"))
+    frozen |= {p for p in operations['paths'] if p.startswith('/api/v1/admin/')}
     source = text("admin-api.js")
     used = set(re.findall(r"'(/api/v1/admin/[^'`]*)'", source))
-    used |= {p.replace("${encodeURIComponent(versionId)}", "{version_id}")
+    used |= {p.replace("${encodeURIComponent(versionId)}", "{version_id}").replace("${day}", "{day}")
              for p in re.findall(r"`(/api/v1/admin/[^`]*)`", source)}
     assert used == frozen
 

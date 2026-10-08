@@ -8,6 +8,7 @@
 <!-- 상대 경로: FastAPI(/static/admin.html)와 저장소 루트 정적 서버(/frontend/admin.html) 모두에서 동작 -->
 <link rel="stylesheet" href="admin.css">
 <script defer src="admin-api.js"></script>
+<script defer src="admin-operations.js"></script>
 <script defer src="admin.js"></script>
 </head>
 <body>
@@ -37,6 +38,42 @@
 
   <!-- 관리 화면 -->
   <div id="console-view" class="console" hidden>
+    <section class="panel traffic" aria-labelledby="traffic-title">
+      <div class="versions-head">
+        <h2 id="traffic-title">홈페이지 방문 현황</h2>
+        <button type="button" id="reload-traffic" class="quiet-button">집계 새로고침</button>
+      </div>
+      <dl class="traffic-grid">
+        <div><dt>오늘 방문자</dt><dd id="today-visitors">—</dd></div>
+        <div><dt>누적 방문자</dt><dd id="total-visitors">—</dd></div>
+        <div><dt>오늘 조회 수</dt><dd id="today-page-views">—</dd></div>
+        <div><dt>누적 조회 수</dt><dd id="total-page-views">—</dd></div>
+      </dl>
+      <p class="hint">한국시간 기준 · 같은 브라우저의 반복 방문은 방문자 1명으로 집계합니다. 페이지를 다시 열거나 새로고침하면 조회 수가 늘어납니다. 다른 기기·브라우저나 쿠키 삭제 후에는 새 방문자로 집계됩니다. 기능 적용 시점부터 집계합니다.</p>
+      <p id="traffic-status" class="hint" role="status"></p>
+    </section>
+    <section class="panel closures" aria-labelledby="closures-title">
+      <h2 id="closures-title">휴관일 캘린더</h2>
+      <p class="hint">날짜를 선택해 휴관일로 등록하거나 해제하세요. 저장하면 이용자 화면의 다음 조회부터 바로 반영됩니다. 매주 월요일은 정기 휴관일입니다.</p>
+      <div class="calendar-head">
+        <button type="button" id="calendar-prev" class="quiet-button" aria-label="이전 달">‹</button>
+        <h3 id="calendar-month" aria-live="polite"></h3>
+        <button type="button" id="calendar-next" class="quiet-button" aria-label="다음 달">›</button>
+      </div>
+      <div class="calendar-week" aria-hidden="true"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+      <div id="closure-calendar" class="calendar-days" aria-label="날짜 선택"></div>
+      <p class="hint">초록색: 등록된 휴관일 · 회색: 월요일 정기 휴관</p>
+      <form id="closure-form">
+        <p id="closure-selected" class="selected-date">달력에서 날짜를 선택하세요.</p>
+        <label for="closure-reason">휴관 사유 <span class="hint">(선택)</span></label>
+        <input id="closure-reason" maxlength="80" placeholder="예: 공휴일, 시설 점검" disabled>
+        <div class="closure-actions">
+          <button type="submit" id="save-closure" disabled>휴관일 등록</button>
+          <button type="button" id="remove-closure" class="quiet-button" disabled>휴관일 해제</button>
+        </div>
+      </form>
+      <p id="closure-status" class="hint" role="status" aria-live="polite"></p>
+    </section>
     <section class="panel upload" id="upload-panel" aria-labelledby="upload-title">
       <h1 id="upload-title" tabindex="-1">출입 기록 Excel 게시</h1>
       <p class="hint">검증을 통과한 파일만 이용자 화면에 반영됩니다. 검증에 실패하면 지금 이용자 화면이 그대로 유지됩니다.</p>

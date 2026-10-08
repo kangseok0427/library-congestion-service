@@ -115,3 +115,22 @@ dialog p { margin-top: 10px; overflow-wrap: anywhere; }
   .slot-side, .slot-side .quiet-button { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.traffic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 20px 0 12px; }
+.traffic-grid > div { padding: 14px; border-radius: 12px; background: var(--paper); }
+.traffic-grid dt { color: var(--muted); font-size: 14px; }
+.traffic-grid dd { margin: 4px 0 0; font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.calendar-head { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 10px; }
+.calendar-head h3 { margin: 0; font-size: 18px; }
+.calendar-head button { padding: 5px 14px; font-size: 24px; }
+.calendar-week, .calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.calendar-week { text-align: center; color: var(--muted); margin-bottom: 6px; font-size: 14px; }
+.calendar-day { padding: 8px 0; min-height: 42px; color: var(--ink); border: 1px solid var(--line); background: var(--card); font-variant-numeric: tabular-nums; }
+.calendar-day.registered { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.calendar-day.regular { color: var(--muted); background: var(--paper); }
+.calendar-day[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: -3px; }
+.calendar-day[aria-current="date"] { text-decoration: underline; text-underline-offset: 4px; }
+#closure-form { display: grid; gap: 8px; margin-top: 18px; }
+.selected-date { font-weight: 600; }
+#closure-reason { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.closure-actions { display: flex; flex-wrap: wrap; gap: 8px; }

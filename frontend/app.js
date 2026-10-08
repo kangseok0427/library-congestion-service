@@ -181,3 +181,8 @@ setDateWindow({ min_date: $('date').value, max_date: addDays($('date').value, 7)
 $('date-form').addEventListener('submit', e => { e.preventDefault(); load(); });
 $('refresh').addEventListener('click', load);
 load();
+// One page opening counts once; date changes and chart refreshes are not visits.
+// Analytics is independent of statistics and never blocks the visitor screen.
+if (!new URLSearchParams(location.search).has('mock')) {
+  fetch('/api/v1/visit', {method: 'POST', credentials: 'same-origin', cache: 'no-store'}).catch(() => {});
+}

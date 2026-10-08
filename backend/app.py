@@ -22,6 +22,7 @@ from .admin_upload import (MAX_UPLOAD_BYTES, RecordsPublisher, UploadAPIError,
 from .service import KST, LibraryService
 from .library_hours import DEFAULT_HOURS, date_window, now_kst, validate_service_date
 from library_etl.versions import VersionStore, VersionError
+from .operations import FileOperations, OperatingProvider, install_operations
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -58,7 +59,7 @@ class FileProvider:
 
 
 def create_app(provider=None, clock=now_kst, upload_token=None,
-               max_upload_bytes=MAX_UPLOAD_BYTES, admin_backend=None):
+               max_upload_bytes=MAX_UPLOAD_BYTES, admin_backend=None, operations=None):
     path = os.environ.get('LIBRARY_RECORDS')
     provider = provider or FileProvider(path or ROOT / 'data/sample/records.json', sample=not bool(path))
     publisher = RecordsPublisher(provider.path) if hasattr(provider, 'path') else None
@@ -86,6 +87,12 @@ def create_app(provider=None, clock=now_kst, upload_token=None,
     def require_session(request):
         if not authenticated(request):
             raise UploadAPIError('관리자 로그인이 필요합니다.', 'UNAUTHORIZED', 401)
+
+    operations = operations or (FileOperations(provider.path) if hasattr(provider, 'path') else None)
+    service_provider = OperatingProvider(provider, operations) if operations else provider
+    if operations:
+        install_operations(app, operations, admin_backend.user if admin_backend else require_session, clock,
+                           secure_cookies=admin_backend is not None)
 
     def session_id():
         raw = secrets.token_urlsafe(32)
@@ -233,26 +240,27 @@ def create_app(provider=None, clock=now_kst, upload_token=None,
     @app.get('/api/v1/meta')
     def meta():
         now = clock().astimezone(KST)
-        return dict(library_name='용산꿈나무도서관', available_hours=DEFAULT_HOURS.hours(now.date()), levels=LEVELS,
+        service = service_provider.get()
+        return dict(library_name='용산꿈나무도서관', available_hours=service.policy.hours(now.date()), levels=LEVELS,
                     date_window=date_window(now),
-                    date_availability=provider.get().date_availability(now),
+                    date_availability=service.date_availability(now),
                     hours_note='평일 09:00~21:00 · 주말 09:00~17:00 · 매주 월요일 및 등록된 휴관일 제외. 시간 라벨은 현장 확인 전 임시 기준입니다.')
 
     @app.get('/api/v1/congestion/today')
     def today(date: str | None = None):
         now = clock().astimezone(KST)
         target = validate_service_date(date, now) if date is not None else now.date()
-        return provider.get().today(now=now, target=target)
+        return service_provider.get().today(now=now, target=target)
 
     @app.get('/api/v1/stats')
     def stats(date: str):
         now = clock().astimezone(KST)
         validate_service_date(date, now)
-        return provider.get().stats(date, now=now)
+        return service_provider.get().stats(date, now=now)
 
     @app.get('/api/v1/patterns')
     def patterns():
-        return provider.get().patterns()
+        return service_provider.get().patterns()
 
     @app.get('/api/v1/health')
     def health():
