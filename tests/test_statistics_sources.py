@@ -4,19 +4,19 @@ from backend.service import LibraryService
 from tests.test_presence import day_records
 
 
-def test_unusable_matching_date_is_distinct_from_absent_date():
+def test_corrected_matching_date_is_included_and_distinct_from_absent_date():
     valid = day_records('2024-10-08', [(5, 1)] * 12)
     negative = day_records('2022-10-08', [(1, 10)] * 8)
     unrelated = day_records('2025-10-07', [(99, 0)] * 12)
     service = LibraryService(valid + negative + unrelated)
     hours = service.today(target=date(2026, 10, 8))['hourly']
     assert hours[0]['matched_source_dates'] == ['2022-10-08', '2024-10-08']
-    assert hours[0]['source_dates'] == ['2024-10-08']
-    assert hours[0]['estimated_present'] == 4
-    assert hours[0]['excluded_samples'] == [
-        {'date': '2022-10-08', 'reason': 'negative_balance'}]
-    assert hours[1]['excluded_samples'] == [
-        {'date': '2022-10-08', 'reason': 'insufficient_data'}]
+    assert hours[0]['source_dates'] == ['2022-10-08', '2024-10-08']
+    assert hours[0]['estimated_present'] == 2
+    assert hours[0]['excluded_samples'] == []
+    assert hours[0]['corrected_source_dates'] == ['2022-10-08']
+    assert hours[1]['excluded_samples'] == []
+    assert hours[1]['source_dates'] == ['2022-10-08', '2024-10-08']
     assert hours[-1]['excluded_samples'] == [
         {'date': '2022-10-08', 'reason': 'outside_operating_hours'}]
     missing = service.today(target=date(2026, 10, 9))['hourly']

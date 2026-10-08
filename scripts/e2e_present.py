@@ -212,6 +212,33 @@ def main():
                     assert all(page.locator('#chart .bar').evaluate_all('els => els.map(e => e.className)')[i] == 'bar none'
                                for i in range(len(body['hourly'])))
             checks.append('ADE-43 v2 fixtures: open bars, insufficient grey + 자료 부족, closed hides bars')
+
+            # 9) Missing source dates are skipped explicitly, never displayed
+            # as a different date's bars under the original date label.
+            page.unroute('**/api/v1/congestion/today*')
+            meta = page.request.get(url + '/api/v1/meta').json()
+            meta['date_availability'] = {
+                'available_dates': [add.isoformat() for offset in range(8)
+                                    if (add := date.fromisoformat(DAY) + timedelta(days=offset)).isoformat()
+                                    not in ('2026-09-26', '2026-09-29')],
+                'skipped_dates': ['2026-09-26', '2026-09-29'],
+            }
+            page.route('**/api/v1/meta', lambda route: route.fulfill(
+                status=200, content_type='application/json', body=json.dumps(meta)))
+            page.locator('#date').fill('2026-09-26')
+            page.get_by_role('button', name='조회', exact=True).click()
+            expect(page.locator('#date')).to_have_value('2026-09-27')
+            expect(page.locator('#guide-when')).to_contain_text('9월 27일')
+            expect(page.locator('#date-hint')).to_contain_text('건너뛰었습니다')
+            check_hours(page, page.request.get(url + '/api/v1/congestion/today?date=2026-09-27').json())
+            # At the end of the range, use the last selectable date; do not
+            # expand the range past seven days. Closure notices remain intact.
+            page.locator('#date').fill('2026-09-29')
+            page.get_by_role('button', name='조회', exact=True).click()
+            expect(page.locator('#date')).to_have_value('2026-09-28')
+            expect(page.locator('#guide-title')).to_have_text('휴관일')
+            expect(page.locator('#hours')).to_be_hidden()
+            checks.append('missing dates skip with updated selection, date label and hint; range and closures preserved')
             browser.close()
         print(json.dumps({'e2e_present': 'PASS', 'input': 'ADE-40 fixtures + team backend (synthetic records)', 'checks': checks}, ensure_ascii=False))
     finally:

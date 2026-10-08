@@ -57,8 +57,8 @@ def test_no_matching_calendar_date_is_not_filled_with_other_dates():
 
 def test_missing_later_hours_do_not_make_eleven_to_one_a_quiet_recommendation():
     # 11/12 are the lowest available pair, but every hour from 13 is unknown.
-    rows = day_records('2021-10-08', [(10, 0), (0, 5), (0, 4), (0, 0), (0, 2)]
-                       + [(0, 0)] * 7)
+    rows = day_records('2021-10-08', [(10, 0), (0, 5), (0, 4), (0, 0)] + [(0, 0)] * 8)
+    rows = [r for r in rows if not (r['hour'] == 13 and r['gate'] == 'back')]
     body = result(rows)
     hours = {h['hour']: h for h in body['hourly']}
     assert hours[11]['estimated_present'] == hours[12]['estimated_present'] == 1
@@ -89,6 +89,20 @@ def test_future_recommendation_compares_whole_selected_day():
                          target=date(2026, 10, 8))
     assert body['recommendation']['best_start_hour'] == 9
     assert '조회한 시간대 중' in body['recommendation']['message']
+
+
+def test_corrected_zero_is_included_in_same_date_average_and_later_hours():
+    rows = records('2021-10-08', 4)
+    rows += day_records('2025-10-08', [(0, 5), (6, 0)] + [(0, 0)] * 10)
+    body = result(rows)
+    first, second = body['hourly'][:2]
+    assert first['source_dates'] == ['2021-10-08', '2025-10-08']
+    assert first['sample_count'] == 2 and first['estimated_present'] == 2
+    assert first['corrected_source_dates'] == ['2025-10-08']
+    assert first['corrected_sample_count'] == 1 and first['excluded_samples'] == []
+    assert second['estimated_present'] == 7 and second['sample_count'] == 2
+    assert all(h['estimated_present'] is not None for h in body['hourly'])
+    assert body['statistics']['negative_balance_correction'] == 'floor_at_zero_continue'
 
 
 def test_fractional_mean_is_preserved_and_legacy_week_setting_has_no_effect():

@@ -2,8 +2,10 @@
 
 Each open day starts at 0 at opening; every operating hour adds front+back IN and
 subtracts front+back OUT. From the first untrustworthy hour (missing gate, partial
-collection, missing OUT, negative balance, missing hour) the rest of that day has
-no value. Forecasts average recent valid values of the same weekday and hour and
+collection, missing OUT, missing hour) the rest of that day has no value. A
+negative computed balance is floored at zero and accumulation continues from
+that corrected balance; the source IN/OUT values are never changed.
+Forecasts average recent valid values of the same weekday and hour and
 fall back to the same hour only when fewer than two same-weekday samples exist.
 The ETL preserves every validated hourly OUT value, including OUT_11. If IN and
 OUT are equal in a slot, the cumulative estimate simply stays unchanged.
@@ -43,11 +45,10 @@ def observed(records, policy=DEFAULT_HOURS):
                 status = 'partial'
             elif any(r['out_count'] is None for r in rows):
                 status = 'missing_out'
-            elif balance + sum(r['in_count'] - r['out_count'] for r in rows) < 0:
-                status = 'negative_balance'
             else:
-                balance += sum(r['in_count'] - r['out_count'] for r in rows)
-                result[day, hour] = (balance, 'valid')
+                calculated = balance + sum(r['in_count'] - r['out_count'] for r in rows)
+                balance = max(0, calculated)
+                result[day, hour] = (balance, 'negative_corrected' if calculated < 0 else 'valid')
                 continue
             broken = True
             result[day, hour] = (None, status)

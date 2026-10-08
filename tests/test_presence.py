@@ -56,13 +56,30 @@ def test_resets_each_day_and_ignores_hours_outside_operation():
 @pytest.mark.parametrize('change,status', [
     (lambda rows: [r for r in rows if not (r['gate'] == 'back' and r['hour'] == 11)], 'missing_gate'),
     (lambda rows: [dict(r, out_count=None) if r['hour'] == 11 and r['gate'] == 'front' else r for r in rows], 'missing_out'),
-    (lambda rows: [dict(r, in_count=0, out_count=50) if r['hour'] == 11 and r['gate'] == 'front' else r for r in rows], 'negative_balance'),
 ])
 def test_untrusted_hour_stops_the_rest_of_the_day(change, status):
     present = observed(change(day_records(TUE, [(5, 1)] * 12)))
     assert present['2026-09-22', 10] == (8, 'valid')
     assert present['2026-09-22', 11] == (None, status)
     assert all(present['2026-09-22', h] == (None, 'insufficient_data') for h in HOURS if h > 11)
+
+
+def test_negative_balance_is_corrected_and_next_hour_continues():
+    # 09 deficit -> 0, 10 recovery -> 5, 11 deficit -> 0, 12 recovery -> 3.
+    rows = day_records(TUE, [(1, 4), (5, 0), (1, 10), (3, 0)] + [(0, 0)] * 8)
+    original = [dict(r) for r in rows]
+    present = observed(rows)
+    assert values(present, '2026-09-22')[:5] == [
+        (0, 'negative_corrected'), (5, 'valid'), (0, 'negative_corrected'),
+        (3, 'valid'), (3, 'valid')]
+    assert all(v is not None for v, _ in values(present, '2026-09-22'))
+    assert rows == original
+
+
+def test_negative_correction_happens_after_both_gates_are_combined():
+    rows = day_records(TUE, [(0, 10)] + [(0, 0)] * 11,
+                       [(20, 0)] + [(0, 0)] * 11)
+    assert observed(rows)['2026-09-22', 9] == (10, 'valid')
 
 
 def test_partial_and_missing_hour_and_closed_day():

@@ -105,7 +105,7 @@ function renderBars(hourly, metric, currentHour) {
 async function load() {
   const current = ++generation;
   clear(); $('error').hidden = true;
-  const day = $('date').value;
+  let day = $('date').value;
   try {
     const meta = await api.meta();
     if (current !== generation) return;
@@ -113,6 +113,22 @@ async function load() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < $('date').min || day > $('date').max || !$('date').checkValidity()) {
       showError('한국시간 기준 오늘부터 7일 후까지만 조회할 수 있습니다.');
       return;
+    }
+    const availability = meta.date_availability;
+    const skipped = availability?.skipped_dates || [];
+    if (skipped.includes(day)) {
+      const available = (availability.available_dates || []).filter(d => d >= $('date').min && d <= $('date').max).sort();
+      const next = available.find(d => d > day) || available[available.length - 1];
+      if (!next) {
+        setGuide('insufficient', koDate(day), '자료 없음', '조회 기간에 같은 날짜의 과거 기록이 없습니다.');
+        $('hours').hidden = true;
+        return;
+      }
+      $('date-hint').textContent = `${koDate(day)}의 과거 기록이 없어 ${koDate(next)}로 건너뛰었습니다.`;
+      day = next;
+      $('date').value = day;
+    } else {
+      $('date-hint').textContent = '오늘부터 7일 후까지 볼 수 있습니다. 과거 기록이 없는 날짜는 건너뜁니다.';
     }
     const data = await api.today(day);
     if (current !== generation) return;

@@ -54,7 +54,9 @@ in_count, out_count, total_in, total_out, is_partial, source_file.
 ## 추정 체류 인원 (ADE-40, `backend/presence.py`)
 
 - 운영일마다 운영 시작 시 0명에서 시작해 시간대별 `이전 값 + 정문·후문 IN 합 − OUT 합`을 누적합니다. 날짜가 바뀌면 초기화하고 원본 IN/OUT은 그대로 둡니다.
-- 출입구 누락(`missing_gate`), 부분 수집(`partial`), OUT 결측(`missing_out`), 누적 음수(`negative_balance`), 시간대 누락이 나오면
+- 누적 계산값이 음수가 되면 해당 시간은 0명으로 보정(`negative_corrected`)하고, 다음 시간부터 그 0명에 다시 입·퇴장을 누적합니다.
+  보정한 0명도 같은 날짜의 평균 통계에 포함하며, 원본 IN/OUT은 고치지 않습니다. 두 출입구를 합산한 뒤 보정합니다.
+- 출입구 누락(`missing_gate`), 부분 수집(`partial`), OUT 결측(`missing_out`), 시간대 누락이 나오면
   그 시점부터 그날 나머지는 값 없이 `insufficient_data`입니다. OUT 결측을 0으로 바꾸지 않습니다.
 - **OUT_11 (2026-10-01 재검토)**: 원본 Excel의 검증된 값을 그대로 사용합니다. IN과 OUT이 같으면 해당 시간의
   순변화가 0이므로 이전 추정 체류 인원을 유지하고, 12시 이후도 정상적으로 누적합니다. 일일 `total_out`으로 역산하지 않습니다.
@@ -89,7 +91,9 @@ stats의 실제 관측값은 baseline 대비 증감률을 계산하지만 partia
 
 - GET /api/v1/congestion/today: v1 forecast 응답. optional `?date=YYYY-MM-DD`는 검증/날짜 조회용 확장입니다.
 - GET /api/v1/stats?date=YYYY-MM-DD: 원본 일일 합계와 시간대 집계. partial/complete 구분. hourly에 그날의 `estimated_present`, `quality_status` 추가.
-- GET /api/v1/meta: 이름, 수집 시간대, quiet/normal/busy 한국어 레이블.
+- GET /api/v1/meta: 이름, 수집 시간대, quiet/normal/busy 한국어 레이블, 조회 범위와 날짜별 조회 가능 여부.
+  같은 월·일의 과거 원본이 없는 운영일은 `date_availability.skipped_dates`이며 화면에서 다음 조회 가능 날짜로 건너뜁니다.
+  범위 끝에 다음 날짜가 없으면 범위 안의 마지막 조회 가능 날짜를 사용합니다. 휴관 안내 날짜는 유지합니다.
 - GET /api/v1/patterns: 완전한 날짜의 일·요일·월 통계 확장.
 - 오류는 `{error: {code, message}}`. 날짜 오류 400, 자료 없음 404, 입력 처리 오류 422.
 - 추가 메타데이터: method, sample_count, is_sample, basis. 공통 필드 이름을 변경하지 않습니다.
